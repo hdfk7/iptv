@@ -17,7 +17,7 @@ adb install -r app/build/outputs/iptv-debug.apk
 adb shell am start -n cn.hdfk7.android.iptv.debug/cn.hdfk7.android.iptv.app.MainActivity
 ```
 
-Debug 包名 `cn.hdfk7.android.iptv.debug`、启动器名称 iptv-debug；Release 包名 `cn.hdfk7.android.iptv`、名称 iptv。电视需开启开发者选项并完成 ADB 授权。macOS/Linux 使用 `./gradlew`。
+Debug 包名 `cn.hdfk7.android.iptv.debug`、启动器名称 IPTV；Release 包名 `cn.hdfk7.android.iptv`、名称 IPTV。电视需开启开发者选项并完成 ADB 授权。macOS/Linux 使用 `./gradlew`。
 
 最初的 APK 使用临时调试签名；如新签名覆盖旧包发生冲突，需先卸载旧包，卸载将清除其数据。新版带 .debug 后缀的包可与最初无后缀包并存。
 
@@ -103,3 +103,5 @@ Kotlin 使用显式参数和命名回调，无尾随 Lambda；界面单一根组
 首页右上角打开“HTTP 代理”，填写 IPv4/IPv6、端口及可选用户名/密码，开启并保存。支持 HTTP 转发和 HTTPS CONNECT、Basic 代理认证，不支持 SOCKS。订阅下载、视频清单及分片均使用同一代理；保存后重连当前节目并刷新当前源。关闭后直接连接。代理故障不会静默改为直连，更新失败保留缓存。配置在本机通过 Android Keystore AES-GCM 加密保存，不备份，不输出认证信息。
 
 启动默认选中订阅源列表中的第一个源；没有普通订阅源时显示收藏源。当前运行期间仍可切换源，前后台切换不会重置选择。
+
+应用显示名称为 IPTV；内置订阅源简称为“精选”和“综合”，升级仅替换未修改的默认长名称。首次节目列表加载后，遥控器焦点定位到第一个节目；退出全屏仍回到视频区域。

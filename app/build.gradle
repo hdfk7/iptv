@@ -41,7 +41,7 @@ android {
         debug {
             applicationIdSuffix = '.debug'
             signingConfig = signingConfigs.debug
-            resValue "string", "app_display_name", "${APP_DISPLAY_NAME}-debug"
+            resValue "string", "app_display_name", APP_DISPLAY_NAME
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         release {
