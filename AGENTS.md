@@ -1,0 +1,20 @@
+# IPTV Android conventions
+
+Use native Kotlin and Compose. Keep packages under cn.hdfk7.android.iptv:
+- app: Application and Activity host
+- core/model: plain models, no HTTP/JSON
+- core/data/local, network, repository, worker: persistence, parsing, refresh, scheduling
+- core/ui/theme: shared Compose theme
+- feature/player: player state, ViewModel, screen and named components
+
+Follow these Kotlin readability conventions: four spaces, multiline braced control-flow bodies, explicit return types, explicit lambda parameters, named callbacks and Compose slot arguments, no trailing lambda syntax, one top-level root per UI composable. Put text in strings.xml and graphics in drawable resources. Separate behavior from presentation.
+
+Target Android 14 (API 34); do not call newer platform APIs without guards. Unit tests use JUnit 5 and names ending Tests. Do not embed channel lists; follow the explicit signing rules below. Build with ./gradlew :app:testDebugUnitTest :app:assembleDebug.
+
+## Source and playback behavior
+
+`feature/source` owns source management state and dialogs. One source is active at a time. Aggregate program URLs by normalized program name, including across source contributions in the favorites source. Keep favorite contributions separately so refreshed URLs retain their origins. Next/previous always change the program. Playback probes candidate URLs in order and stops probing when one is ready. Timeouts are configured by STREAM_*_TIMEOUT_MS in gradle.properties.
+
+## Git and packaging
+
+Use concise Conventional Commit subjects with a Chinese summary (`feat:完善节目收藏`). Keep each commit focused and describe affected modules and verification in PRs. Ignore build output, IDE caches and local.properties. By the user's explicit instruction, the local APK signing file `signing/sign` and APK_SIGN_* settings in gradle.properties are included as project files and must not be added to ignore rules. Do not print signing passwords in logs or reports. Debug uses .debug application ID suffix; release uses the base ID. APK filenames use app name, build type, version and timestamp.

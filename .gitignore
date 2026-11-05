@@ -1,0 +1,46 @@
+# Gradle / Android build output
+.gradle/
+.kotlin/
+build/
+.externalNativeBuild/
+.cxx/
+captures/
+*.apk
+*.aab
+*.ap_
+*.hprof
+
+# Local SDK, IDE and editor state
+local.properties
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python QA tooling caches and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# OS files and runtime logs
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+*.tmp
+
+# signing/sign and APK_SIGN_* in gradle.properties are tracked by project policy.
+
+/qa/__pycache__/

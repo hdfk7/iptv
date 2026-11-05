@@ -1,0 +1,93 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.compose.compiler)
+}
+android {
+    namespace = 'cn.hdfk7.android.iptv'
+    compileSdk {
+        version = release(37)
+    }
+    signingConfigs {
+        debug {
+            keyAlias = APK_SIGN_KEY_PASSWORD_DEBUG_ALIAS
+            keyPassword = APK_SIGN_KEY_PASSWORD_DEBUG
+            storeFile = file(APK_SIGN_STORE_PATH)
+            storePassword = APK_SIGN_STORE_PASSWORD
+        }
+        prod {
+            keyAlias = APK_SIGN_KEY_PASSWORD_PROD_ALIAS
+            keyPassword = APK_SIGN_KEY_PASSWORD_PROD
+            storeFile = file(APK_SIGN_STORE_PATH)
+            storePassword = APK_SIGN_STORE_PASSWORD
+        }
+    }
+    defaultConfig {
+        applicationId = 'cn.hdfk7.android.iptv'
+        minSdk = 26
+        targetSdk = 34
+        versionCode = 3
+        versionName = '1.1.1'
+        buildConfigField "boolean", "APP_DEBUG_SWITCH", APP_DEBUG_SWITCH
+        buildConfigField "int", "STREAM_CONNECT_TIMEOUT_MS", providers.gradleProperty("STREAM_CONNECT_TIMEOUT_MS").getOrElse("5000")
+        buildConfigField "int", "STREAM_READ_TIMEOUT_MS", providers.gradleProperty("STREAM_READ_TIMEOUT_MS").getOrElse("5000")
+        buildConfigField "int", "STREAM_PROBE_TIMEOUT_MS", providers.gradleProperty("STREAM_PROBE_TIMEOUT_MS").getOrElse("8000")
+    }
+    buildFeatures {
+        resValues = true
+        buildConfig = true
+        compose = true
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix = '.debug'
+            signingConfig = signingConfigs.debug
+            resValue "string", "app_display_name", "${APP_DISPLAY_NAME}-debug"
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        release {
+            optimization {
+                enable = false
+            }
+            signingConfig = signingConfigs.prod
+            resValue "string", "app_display_name", APP_DISPLAY_NAME
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    packaging {
+        resources {
+            excludes += ['META-INF/INDEX.LIST']
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+    testOptions {
+        unitTests.all {
+            useJUnitPlatform()
+        }
+    }
+}
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.each { output ->
+            def date = new Date().format('yyyyMMddHHmmss')
+            output.outputFileName.set("${APP_DISPLAY_NAME}-${variant.buildType}-v${output.versionName.get()}-${date}.apk")
+        }
+    }
+}
+
+dependencies {
+    implementation platform(libs.compose.bom)
+    implementation libs.compose.ui
+    implementation libs.compose.material3
+    implementation libs.activity.compose
+    implementation libs.lifecycle.runtime.compose
+    implementation libs.lifecycle.viewmodel.compose
+    implementation libs.media.player
+    implementation libs.media.hls
+    implementation libs.media.ui
+    implementation libs.work.runtime
+    testImplementation libs.junit
+    testRuntimeOnly libs.junit.launcher
+}
