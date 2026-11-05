@@ -84,7 +84,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (catalog.loaded) {
                     catalogToken = token
                 }
-                if (activeChannel == null && catalog.channels.isNotEmpty()) {
+                val selected = activeChannel
+                val selectionMissing = selected != null && catalog.channels.none(predicate = { channel -> channel.id == selected.id })
+                if (catalog.channels.isNotEmpty() && (activeChannel == null || selectionMissing)) {
                     select(channel = catalog.channels.first())
                 }
                 if (switched) {
@@ -107,6 +109,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 mutableState.value = state.value.copy(message = R.string.storage_error)
             }
         })
+    }
+
+    fun refreshManually() {
+        state.value.channels.firstOrNull()?.let { channel -> select(channel = channel) }
+        refresh()
     }
 
     fun enterFullscreen() {
