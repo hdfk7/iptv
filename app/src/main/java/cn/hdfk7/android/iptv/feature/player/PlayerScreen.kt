@@ -125,7 +125,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                     HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onProxy = { proxyOpen = true })
                     HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                     Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp), content = {
-                        ChannelPanel(state = state, onSelect = viewModel::select, onFavorite = viewModel::toggleFavorite, onRefresh = viewModel::refreshManually, requestInitialFocus = initialChannelFocusPending, onInitialFocus = { initialChannelFocusPending = false }, selectedRowFocus = selectedRowFocus)
+                        ChannelPanel(state = state, onSelect = viewModel::select, onRefresh = viewModel::refreshManually, requestInitialFocus = initialChannelFocusPending, onInitialFocus = { initialChannelFocusPending = false }, selectedRowFocus = selectedRowFocus)
                         PlaybackPanel(state = state, viewModel = viewModel, modifier = Modifier.weight(1f), videoFocus = videoFocus, selectedRowFocus = selectedRowFocus, onVideoBounds = { bounds -> videoBounds = bounds })
                     })
                 })
@@ -156,7 +156,7 @@ private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewMod
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, onFavorite: (Channel) -> Unit, onRefresh: () -> Unit, requestInitialFocus: Boolean, onInitialFocus: () -> Unit, selectedRowFocus: SelectedRowFocus) {
+private fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, onRefresh: () -> Unit, requestInitialFocus: Boolean, onInitialFocus: () -> Unit, selectedRowFocus: SelectedRowFocus) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
     val listState = rememberLazyListState()
     var enteringList by remember(calculation = { mutableStateOf(false) })
@@ -202,13 +202,13 @@ private fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, onFavo
                         }
                     }), verticalArrangement = Arrangement.spacedBy(6.dp), content = {
                         itemsIndexed(items = state.channels, key = { _, channel -> channel.id }, itemContent = { index, channel ->
-                            ChannelRow(channel = channel, index = index, selected = channel.id == state.selectedId, favorite = channel.id in state.favoriteIds, showSource = favorites, requestFocus = requestInitialFocus && index == 0, selectedRowFocus = selectedRowFocus, onInitialFocus = onInitialFocus, onFocused = {
+                            ChannelRow(channel = channel, index = index, selected = channel.id == state.selectedId, showSource = favorites, requestFocus = requestInitialFocus && index == 0, selectedRowFocus = selectedRowFocus, onInitialFocus = onInitialFocus, onFocused = {
                                 if (enteringList) {
                                     enteringList = false
                                 } else {
                                     selectChannel(channel)
                                 }
-                            }, onSelect = { selectChannel(channel) }, onFavorite = { onFavorite(channel) })
+                            }, onSelect = { selectChannel(channel) })
                         })
                     })
                 }
@@ -237,7 +237,7 @@ private suspend fun LazyListState.centerItem(index: Int) {
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, favorite: Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: SelectedRowFocus, onInitialFocus: () -> Unit, onFocused: () -> Unit, onSelect: () -> Unit, onFavorite: () -> Unit) {
+private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: SelectedRowFocus, onInitialFocus: () -> Unit, onFocused: () -> Unit, onSelect: () -> Unit) {
     val channelFocus = remember(calculation = { FocusRequester() })
     val view = LocalView.current
     SideEffect {
@@ -259,7 +259,7 @@ private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, favorite
         onInitialFocus()
     })
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), content = {
-        TvAction(modifier = Modifier.weight(1f).height(58.dp).focusRequester(channelFocus).onFocusChanged(onFocusChanged = { focus ->
+        TvAction(modifier = Modifier.fillMaxWidth().height(58.dp).focusRequester(channelFocus).onFocusChanged(onFocusChanged = { focus ->
             if (focus.isFocused) {
                 onFocused()
             }
@@ -270,7 +270,6 @@ private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, favorite
                 Text(text = if (showSource) channel.sourceName else channel.group, color = if (selected) Accent else Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             })
         })
-        TvIconButton(icon = R.drawable.ic_star, description = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add), onClick = onFavorite, tint = if (favorite) Gold else Muted, selected = favorite, modifier = Modifier.onFocusChanged(onFocusChanged = { focus -> if (focus.isFocused) onFocused() }))
     })
 }
 
