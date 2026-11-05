@@ -29,7 +29,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.model.PlaylistSource
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
-import cn.hdfk7.android.iptv.core.ui.components.TvButton
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 import cn.hdfk7.android.iptv.core.ui.theme.Accent
 import cn.hdfk7.android.iptv.core.ui.theme.Gold
@@ -76,7 +75,7 @@ private fun SourceList(state: SourceManagerState, library: SourceLibrary, viewMo
         })
         SourceError(error = state.error)
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, content = {
-            TvButton(label = stringResource(R.string.source_add), icon = R.drawable.ic_add, onClick = viewModel::add, enabled = !state.busy)
+            TvIconButton(description = stringResource(R.string.source_add), icon = R.drawable.ic_add, onClick = viewModel::add, enabled = !state.busy)
         })
     })
 }
@@ -89,7 +88,7 @@ private fun SourceCard(name: String, detail: String, active: Boolean, icon: Int,
             Text(text = name, fontWeight = FontWeight.SemiBold, color = Color.White, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(text = detail, color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         })
-        TvButton(label = stringResource(if (active) R.string.source_current else R.string.source_use), icon = if (active) R.drawable.ic_check else R.drawable.ic_play, onClick = onActivate, selected = active, enabled = !busy, modifier = modifier)
+        TvIconButton(description = stringResource(if (active) R.string.source_current else R.string.source_use), icon = if (active) R.drawable.ic_check else R.drawable.ic_play, onClick = onActivate, selected = active, enabled = !busy, modifier = modifier)
         if (onEdit != null) {
             TvIconButton(icon = R.drawable.ic_edit, description = stringResource(R.string.source_edit), onClick = onEdit)
         }
@@ -113,8 +112,8 @@ private fun SourceEditor(state: SourceManagerState, viewModel: SourceManagerView
         OutlinedTextField(value = draft.address, onValueChange = viewModel::editAddress, label = { Text(text = stringResource(R.string.source_address)) }, minLines = 2, maxLines = 2, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), enabled = !state.busy, modifier = Modifier.fillMaxWidth())
         SourceError(error = state.error)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), content = {
-            TvButton(label = stringResource(if (state.busy) R.string.saving else R.string.save), icon = R.drawable.ic_check, onClick = viewModel::save, selected = true, enabled = !state.busy)
-            TvButton(label = stringResource(R.string.cancel), onClick = viewModel::back, enabled = !state.busy)
+            TvIconButton(description = stringResource(if (state.busy) R.string.saving else R.string.save), icon = R.drawable.ic_check, onClick = viewModel::save, selected = true, enabled = !state.busy)
+            TvIconButton(description = stringResource(R.string.cancel), icon = R.drawable.ic_close, onClick = viewModel::back, enabled = !state.busy)
         })
     })
 }
@@ -128,8 +127,8 @@ private fun SourceDelete(state: SourceManagerState, viewModel: SourceManagerView
         DialogHeader(title = stringResource(R.string.source_delete_title, source.name), onClose = viewModel::back)
         SourceError(error = state.error)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), content = {
-            TvButton(label = stringResource(R.string.cancel), onClick = viewModel::back, modifier = Modifier.focusRequester(cancelFocus), enabled = !state.busy)
-            TvButton(label = stringResource(R.string.source_delete), icon = R.drawable.ic_delete, onClick = viewModel::delete, enabled = !state.busy)
+            TvIconButton(description = stringResource(R.string.cancel), icon = R.drawable.ic_close, onClick = viewModel::back, modifier = Modifier.focusRequester(cancelFocus), enabled = !state.busy)
+            TvIconButton(description = stringResource(R.string.source_delete), icon = R.drawable.ic_delete, onClick = viewModel::delete, enabled = !state.busy)
         })
     })
 }

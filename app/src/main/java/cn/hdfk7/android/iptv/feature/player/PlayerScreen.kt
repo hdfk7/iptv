@@ -38,7 +38,6 @@ import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.model.Channel
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
 import cn.hdfk7.android.iptv.core.ui.components.TvAction
-import cn.hdfk7.android.iptv.core.ui.components.TvButton
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 import cn.hdfk7.android.iptv.core.ui.theme.Accent
 import cn.hdfk7.android.iptv.core.ui.theme.Gold
@@ -105,7 +104,10 @@ private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewMod
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
     val source = state.sources.firstOrNull(predicate = { entry -> entry.id == state.activeSourceId })
     Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
-        TvButton(label = if (favorites) stringResource(R.string.favorites) else source?.name ?: stringResource(R.string.no_source), icon = R.drawable.ic_source, onClick = sourceViewModel::open, modifier = Modifier.widthIn(max = 230.dp).focusRequester(focusRequester))
+        TvIconButton(icon = R.drawable.ic_source, description = stringResource(if (favorites) R.string.favorites else R.string.library_title), onClick = sourceViewModel::open, modifier = Modifier.focusRequester(focusRequester))
+        if (!favorites && source != null) {
+            Text(text = source.name, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 230.dp))
+        }
         TvIconButton(description = stringResource(R.string.favorites_count, state.favoriteCount), icon = R.drawable.ic_star, selected = favorites, onClick = sourceViewModel::showFavorites)
         Spacer(modifier = Modifier.weight(1f))
         TvIconButton(description = stringResource(R.string.proxy_title), icon = R.drawable.ic_proxy, onClick = onProxy)

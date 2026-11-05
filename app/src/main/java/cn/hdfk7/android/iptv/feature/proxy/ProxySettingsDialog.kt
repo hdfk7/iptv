@@ -21,7 +21,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.data.local.ProxySettingsStore
-import cn.hdfk7.android.iptv.core.ui.components.TvButton
+import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 
 @Composable
 fun ProxySettingsDialog(store: ProxySettingsStore, onClose: () -> Unit, onSaved: () -> Unit) {
@@ -32,7 +32,7 @@ fun ProxySettingsDialog(store: ProxySettingsStore, onClose: () -> Unit, onSaved:
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false), content = {
         Column(modifier = Modifier.width(560.dp).heightIn(max = 480.dp).background(Color(0xFF111D2E), RoundedCornerShape(22.dp)).padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp), content = {
             Text(text = stringResource(R.string.proxy_title), color = Color.White)
-            TvButton(label = stringResource(if (draft.enabled) R.string.proxy_on else R.string.proxy_off), selected = draft.enabled, onClick = { draft = draft.copy(enabled = !draft.enabled) }, modifier = Modifier.focusRequester(focus))
+            TvIconButton(description = stringResource(if (draft.enabled) R.string.proxy_on else R.string.proxy_off), icon = R.drawable.ic_power, selected = draft.enabled, onClick = { draft = draft.copy(enabled = !draft.enabled) }, modifier = Modifier.focusRequester(focus))
             OutlinedTextField(value = draft.host, onValueChange = { draft = draft.copy(host = it.trim()) }, label = { Text(stringResource(R.string.proxy_ip)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = draft.port, onValueChange = { draft = draft.copy(port = it) }, label = { Text(stringResource(R.string.proxy_port)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
@@ -43,7 +43,7 @@ fun ProxySettingsDialog(store: ProxySettingsStore, onClose: () -> Unit, onSaved:
                 Text(text = stringResource(error!!), color = Color(0xFFFF8A80))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
-                TvButton(label = stringResource(R.string.proxy_save), onClick = {
+                TvIconButton(description = stringResource(R.string.proxy_save), icon = R.drawable.ic_check, onClick = {
                     if (!draft.valid()) {
                         error = R.string.proxy_invalid
                     } else {
@@ -56,7 +56,7 @@ fun ProxySettingsDialog(store: ProxySettingsStore, onClose: () -> Unit, onSaved:
                         }
                     }
                 })
-                TvButton(label = stringResource(R.string.proxy_cancel), onClick = onClose)
+                TvIconButton(description = stringResource(R.string.proxy_cancel), icon = R.drawable.ic_close, onClick = onClose)
             })
         })
     })
