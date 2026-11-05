@@ -192,7 +192,7 @@ class PlaylistRepository(
         }
         try {
             val stored = libraryStore.read()
-            val saved = stored ?: LibraryRules.defaults()
+            val saved = LibraryRules.shortenDefaultNames(stored ?: LibraryRules.defaults())
             library = saved.copy(activeSourceId = saved.sources.firstOrNull()?.id ?: SourceLibrary.FAVORITES_ID)
             if (stored == null || library != stored) {
                 libraryStore.write(library)

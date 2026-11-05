@@ -6,6 +6,16 @@ import org.junit.jupiter.api.Test
 
 class LibraryRulesTests {
     @Test
+    fun shortensOnlyUnmodifiedDefaultSourceNames() {
+        val defaults = LibraryRules.defaults()
+        assertEquals(listOf("精选", "综合"), defaults.sources.map(transform = { source -> source.name }))
+        val legacy = defaults.copy(sources = listOf(defaults.sources[0].copy(name = "best-fan · 每日精选"), defaults.sources[1].copy(name = "myIPTV · IPv4")))
+        assertEquals(defaults, LibraryRules.shortenDefaultNames(legacy))
+        val custom = legacy.copy(sources = legacy.sources.map(transform = { source -> source.copy(name = "自定义") }))
+        assertEquals(custom, LibraryRules.shortenDefaultNames(custom))
+    }
+
+    @Test
     fun knownRepositoriesAndGithubFileLinksResolveToRawPlaylists() {
         assertEquals(LibraryRules.MYIPTV_URL, LibraryRules.normalizeAddress("https://github.com/suxuang/myIPTV/"))
         assertEquals(LibraryRules.DEFAULT_URL, LibraryRules.normalizeAddress("https://github.com/best-fan/iptv-sources.git"))

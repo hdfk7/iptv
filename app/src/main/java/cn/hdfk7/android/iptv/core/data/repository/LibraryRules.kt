@@ -14,10 +14,30 @@ object LibraryRules {
 
     fun defaults(): SourceLibrary {
         val sources = listOf(
-            PlaylistSource("best-fan", "best-fan · 每日精选", DEFAULT_URL),
-            PlaylistSource("myiptv", "myIPTV · IPv4", MYIPTV_URL)
+            PlaylistSource("best-fan", "精选", DEFAULT_URL),
+            PlaylistSource("myiptv", "综合", MYIPTV_URL)
         )
         return SourceLibrary(sources, sources.first().id)
+    }
+
+    fun shortenDefaultNames(library: SourceLibrary): SourceLibrary {
+        val renamed = library.sources.map(transform = { source ->
+            when {
+                source.id == "best-fan" && source.url == DEFAULT_URL && source.name == "best-fan · 每日精选" -> source.copy(name = "精选")
+                source.id == "myiptv" && source.url == MYIPTV_URL && source.name == "myIPTV · IPv4" -> source.copy(name = "综合")
+                else -> source
+            }
+        })
+        val names = renamed.associateBy(keySelector = { source -> source.id })
+        return library.copy(sources = renamed, favorites = library.favorites.map(transform = { channel ->
+            val old = library.sources.firstOrNull(predicate = { source -> source.id == channel.sourceId })
+            val updated = names[channel.sourceId]
+            if (old != null && updated != null && old.name != updated.name && channel.sourceName == old.name) {
+                channel.copy(sourceName = updated.name)
+            } else {
+                channel
+            }
+        }))
     }
 
     fun normalizeAddress(address: String): String {
