@@ -34,6 +34,7 @@ object ChannelAggregation {
             val first = entries.first()
             first.copy(
                 name = ChannelNames.display(first.name),
+                group = entries.firstOrNull(predicate = { channel -> channel.group.isNotBlank() })?.group.orEmpty(),
                 streams = entries.flatMap(transform = { channel -> channel.streams }).distinct(),
                 sourceId = sourceId ?: first.sourceId,
                 sourceName = entries.map(transform = { channel -> channel.sourceName }).filter(predicate = { name -> name.isNotBlank() }).distinct().joinToString(" / ")

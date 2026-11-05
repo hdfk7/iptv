@@ -8,6 +8,20 @@ class PlaylistParserTests {
     private val base = "https://example.org/catalog/list.m3u8"
 
     @Test
+    fun mergedProgramKeepsFirstNonEmptyCategory() {
+        val channels = PlaylistParser().parse("""
+            #EXTM3U
+            #EXTINF:-1,CCTV-17 (1080p)
+            https://example.org/first
+            #EXTINF:-1 group-title="央视频道",CCTV17
+            https://example.org/second
+        """.trimIndent(), "https://example.org/list.m3u")
+        assertEquals(1, channels.size)
+        assertEquals("央视频道", channels.single().group)
+        assertEquals(2, channels.single().streams.size)
+    }
+
+    @Test
     fun acceptsRepositoryHeaderAttributesAndMergesProgramsAcrossGroups() {
         val text = "#EXTM3U x-tvg-url=\"https://example.org/epg.xml\"\n#EXTINF:-1 group-title=\"A\",CCTV1\nhttps://example.org/a\n#EXTINF:-1 group-title=\"B\",CCTV-1综合HD\nhttps://example.org/b"
         val channels = parser.parse(text, base)
