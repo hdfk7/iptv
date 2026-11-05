@@ -15,7 +15,7 @@ class PlaylistRepositoryTests {
     private val initial = SourceLibrary(listOf(first, second), first.id)
 
     @Test
-    fun sourceSelectionNeverCombinesOrdinaryCatalogsAndSurvivesRestart() {
+    fun sourceSelectionStaysIsolatedAndRestartSelectsFirstSource() {
         runBlocking(block = {
             val storage = MemoryLibrary(initial)
             val stores = mutableMapOf<String, MemoryPlaylist>()
@@ -28,10 +28,23 @@ class PlaylistRepositoryTests {
             assertEquals(listOf("Second"), repository.state.value.channels.map(transform = { channel -> channel.name }))
             val restarted = repository(storage, stores, { _ -> throw IOException("offline") })
             restarted.initialize()
-            assertEquals(second.id, restarted.state.value.library.activeSourceId)
-            assertEquals("Second", restarted.state.value.channels.single().name)
+            assertEquals(first.id, restarted.state.value.library.activeSourceId)
+            assertEquals("First", restarted.state.value.channels.single().name)
             assertTrue(restarted.refresh().failed)
-            assertEquals("Second", restarted.state.value.channels.single().name)
+            assertEquals("First", restarted.state.value.channels.single().name)
+        })
+    }
+
+    @Test
+    fun startupLeavesFavoritesForFirstSourceWithoutChangingFavorites() {
+        runBlocking(block = {
+            val storage = MemoryLibrary(initial.copy(activeSourceId = SourceLibrary.FAVORITES_ID))
+            val repository = repository(storage, mutableMapOf(), { _ -> throw AssertionError("No download expected") })
+            repository.initialize()
+            assertEquals(first.id, repository.state.value.library.activeSourceId)
+            repository.activate(second.id)
+            repository.initialize()
+            assertEquals(second.id, repository.state.value.library.activeSourceId)
         })
     }
 
