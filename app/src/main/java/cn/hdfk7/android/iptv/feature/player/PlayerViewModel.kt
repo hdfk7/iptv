@@ -43,7 +43,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var httpClient: okhttp3.OkHttpClient? = null
     private var activeChannel: Channel? = null
     private var streamIndex = 0
-    private var wantsPlayback = true
+    private var wantsPlayback = false
     private var timeout: Job? = null
     private var fallback: Job? = null
     private var generation = 0
@@ -107,13 +107,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun enterFullscreen() {
+        if (activeChannel == null) {
+            return
+        }
         mutableState.value = state.value.copy(fullscreen = true)
+        wantsPlayback = true
+        if (state.value.playback == PlaybackStatus.ERROR) {
+            retry()
+        } else if (player?.currentMediaItem == null) {
+            playLine()
+        } else {
+            player?.playWhenReady = true
+        }
         showInformation()
     }
 
     fun exitFullscreen() {
         infoTimer?.cancel()
         mutableState.value = state.value.copy(fullscreen = false, infoVisible = false)
+        stopStream()
     }
 
     fun showInformation() {
@@ -144,14 +156,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         toggleFavorite(channel)
     }
 
-    private fun clearSelection() {
+    private fun stopStream() {
         generation += 1
         fallback?.cancel()
         timeout?.cancel()
-        activeChannel = null
+        wantsPlayback = false
         player?.stop()
         player?.clearMediaItems()
-        mutableState.value = state.value.copy(selectedId = null, selectedName = null, selectedSourceName = null, playback = PlaybackStatus.IDLE, line = 0, lineCount = 0)
+        mutableState.value = state.value.copy(playback = PlaybackStatus.IDLE, line = 0, lineCount = 0)
+    }
+
+    private fun clearSelection() {
+        stopStream()
+        activeChannel = null
+        mutableState.value = state.value.copy(selectedId = null, selectedName = null, selectedSourceName = null)
     }
 
     fun applyProxy() {
@@ -206,7 +224,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         })
         player = created
-        if (activeChannel != null) {
+        if (activeChannel != null && wantsPlayback) {
             playLine()
         }
     }
@@ -226,11 +244,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun select(channel: Channel) {
         generation += 1
         fallback?.cancel()
+        timeout?.cancel()
         activeChannel = channel
         streamIndex = 0
-        wantsPlayback = true
         mutableState.value = state.value.copy(selectedId = channel.id, selectedName = channel.name, selectedSourceName = channel.sourceName)
-        playLine()
+        if (state.value.fullscreen) {
+            wantsPlayback = true
+            playLine()
+        } else {
+            stopStream()
+        }
         showInformation()
     }
 
@@ -256,27 +279,46 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun togglePlayback() {
+        if (!state.value.fullscreen) {
+            enterFullscreen()
+            return
+        }
         showInformation()
-        val current = player ?: return
         if (activeChannel == null) {
-            changeChannel(1)
+            return
+        }
+        if (state.value.playback == PlaybackStatus.ERROR) {
+            retry()
+            return
+        }
+        val current = player ?: return
+        if (current.currentMediaItem == null) {
+            wantsPlayback = true
+            playLine()
             return
         }
         wantsPlayback = !current.playWhenReady
         current.playWhenReady = wantsPlayback
-        if (wantsPlayback && state.value.playback == PlaybackStatus.ERROR) {
-            retry()
-        }
     }
 
     fun setPlayback(playing: Boolean) {
+        if (!state.value.fullscreen) {
+            if (playing) {
+                enterFullscreen()
+            }
+            return
+        }
         showInformation()
-        if (playing && activeChannel == null) {
-            changeChannel(1)
+        if (activeChannel == null) {
             return
         }
         if (playing && state.value.playback == PlaybackStatus.ERROR) {
             retry()
+            return
+        }
+        if (playing && player?.currentMediaItem == null) {
+            wantsPlayback = true
+            playLine()
             return
         }
         wantsPlayback = playing
