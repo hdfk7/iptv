@@ -3,7 +3,7 @@
 Use native Kotlin and Compose. Keep packages under cn.hdfk7.android.iptv:
 - app: Application and Activity host
 - core/model: plain models, no HTTP/JSON
-- core/data/local, network, repository, worker: persistence, parsing, refresh, scheduling
+- core/data/local, network, repository: persistence, parsing, refresh
 - core/ui/theme: shared Compose theme
 - feature/player: player state, ViewModel, screen and named components
 
@@ -18,3 +18,5 @@ Target Android 14 (API 34); do not call newer platform APIs without guards. Unit
 ## Git and packaging
 
 Use concise Conventional Commit subjects with a Chinese summary (`feat:完善节目收藏`). Keep each commit focused and describe affected modules and verification in PRs. Ignore build output, IDE caches and local.properties. By the user's explicit instruction, the local APK signing file `signing/sign` and APK_SIGN_* settings in gradle.properties are included as project files and must not be added to ignore rules. Do not print signing passwords in logs or reports. Debug uses .debug application ID suffix; release uses the base ID. APK filenames use app name, build type, version and timestamp.
+
+Refresh on foreground entry and manual action only. Do not schedule periodic refresh. WorkManager remains solely to cancel the legacy daily-playlist task. Proxy settings apply to playlist and Media3 networking; never send proxy credentials as origin Authorization headers or log secrets.

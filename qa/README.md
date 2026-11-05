@@ -19,3 +19,5 @@ python qa/build_gallery.py
 完成后打开 `app/build/outputs/qa/index.html`。可按场景分组、搜索、点击放大、方向键翻页；`iptv-scenario-screenshots.zip` 包含图册和全部原始截图。scenarios.json 保存逐项数据，summary.json 汇总结果，restoration.json 记录恢复结果。
 
 不能把模拟器验证等同于小米实体电视测试；强制执行日更任务不代表已经等待真实 24 小时。图册会列明这些边界。
+
+1.2.0 首页收藏、代理、源管理、播放按钮改为图标，无障碍说明保留在 content-desc。旧测试脚本中依赖这些按钮 text 的步骤需要改为 content-desc；worker_cases 仅适用历史版本，当前不再创建周期任务。U01–U03 为新版实际截图。代理 JVM 测试覆盖地址校验、HTTP 407 认证及关闭直连，模拟器完整代理播放和 HTTPS CONNECT 尚未完成实测。

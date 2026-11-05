@@ -25,8 +25,8 @@ android {
         applicationId = 'cn.hdfk7.android.iptv'
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = '1.1.1'
+        versionCode = 4
+        versionName = '1.2.0'
         buildConfigField "boolean", "APP_DEBUG_SWITCH", APP_DEBUG_SWITCH
         buildConfigField "int", "STREAM_CONNECT_TIMEOUT_MS", providers.gradleProperty("STREAM_CONNECT_TIMEOUT_MS").getOrElse("5000")
         buildConfigField "int", "STREAM_READ_TIMEOUT_MS", providers.gradleProperty("STREAM_READ_TIMEOUT_MS").getOrElse("5000")
@@ -87,6 +87,7 @@ dependencies {
     implementation libs.media.player
     implementation libs.media.hls
     implementation libs.media.ui
+    implementation libs.media.okhttp
     implementation libs.work.runtime
     testImplementation libs.junit
     testRuntimeOnly libs.junit.launcher

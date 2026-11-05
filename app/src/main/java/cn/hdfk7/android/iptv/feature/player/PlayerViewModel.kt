@@ -13,7 +13,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import cn.hdfk7.android.iptv.core.data.network.ProxyHttpClient
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import cn.hdfk7.android.iptv.R
@@ -39,6 +40,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val state = mutableState.asStateFlow()
     var player: ExoPlayer? by mutableStateOf(null)
         private set
+    private var httpClient: okhttp3.OkHttpClient? = null
     private var activeChannel: Channel? = null
     private var streamIndex = 0
     private var wantsPlayback = true
@@ -152,11 +154,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         mutableState.value = state.value.copy(selectedId = null, selectedName = null, selectedSourceName = null, playback = PlaybackStatus.IDLE, line = 0, lineCount = 0)
     }
 
+    fun applyProxy() {
+        stop()
+        streamIndex = 0
+        start()
+        refreshJob?.cancel()
+        refresh()
+    }
+
     fun start() {
         if (player != null) {
             return
         }
-        val http = DefaultHttpDataSource.Factory().setConnectTimeoutMs(BuildConfig.STREAM_CONNECT_TIMEOUT_MS).setReadTimeoutMs(BuildConfig.STREAM_READ_TIMEOUT_MS)
+        val settings = (getApplication<Application>() as IptvApplication).proxySettings.current
+        val client = ProxyHttpClient.create(settings, BuildConfig.STREAM_CONNECT_TIMEOUT_MS, BuildConfig.STREAM_READ_TIMEOUT_MS)
+        httpClient = client
+        val http = OkHttpDataSource.Factory(client)
         val created = ExoPlayer.Builder(getApplication())
             .setMediaSourceFactory(DefaultMediaSourceFactory(http))
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
@@ -205,6 +218,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val current = player
         player = null
         current?.release()
+        httpClient?.connectionPool?.evictAll()
+        httpClient?.dispatcher?.executorService?.shutdown()
+        httpClient = null
     }
 
     fun select(channel: Channel) {

@@ -15,6 +15,7 @@ lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-com
 lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 media-player = { module = "androidx.media3:media3-exoplayer", version.ref = "media" }
 media-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media" }
+media-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media" }
 media-ui = { module = "androidx.media3:media3-ui", version.ref = "media" }
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 junit = { module = "org.junit.jupiter:junit-jupiter", version = "5.11.4" }

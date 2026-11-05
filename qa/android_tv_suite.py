@@ -115,6 +115,9 @@ class TvSuite:
             self.key(4)
 
     def main(self):
+        activities = self.run("shell", "dumpsys", "activity", "activities").decode("utf-8", errors="replace")
+        if not re.search(r"(?:mResumedActivity|topResumedActivity)[^\n]*" + re.escape(PACKAGE), activities):
+            self.launch()
         for _ in range(5):
             self.dismiss_keyboard()
             root = self.dump()
@@ -186,6 +189,7 @@ class TvSuite:
         raise AssertionError("Source action not found: " + name + "/" + action)
 
     def activate(self, name, expected_count=None):
+        self.main()
         source = next(source for source in self.library()["sources"] if source["name"] == name)
         if self.library()["activeSourceId"] != source["id"]:
             self.manager()
@@ -675,7 +679,7 @@ class TvSuite:
         local.mkdir(exist_ok=True)
         for suffix in ["", "-wal", "-shm"]:
             try:
-                data = self.run("exec-out", "run-as", PACKAGE, "cat", "databases/androidx.work.workdb" + suffix)
+                data = self.run("exec-out", "run-as", PACKAGE, "cat", "no_backup/androidx.work.workdb" + suffix)
                 (local / ("workdb" + suffix)).write_bytes(data)
             except RuntimeError:
                 pass
@@ -683,10 +687,15 @@ class TvSuite:
             rows = connection.execute("SELECT id,state,interval_duration FROM workspec WHERE worker_class_name LIKE '%PlaylistRefreshWorker'").fetchall()
         assert len(rows) == 1 and rows[0][2] == 86400000
         schedule = self.run("shell", "dumpsys", "jobscheduler").decode("utf-8", errors="replace")
-        matches = re.findall(r"JOB #[^/\n]+/(\d+):[^\n]*" + re.escape(PACKAGE) + r"/androidx\.work\.impl\.background\.systemjob\.SystemJobService", schedule)
+        matches = re.findall(r"^\s*JOB\s+(?:([\w.]+):)?#?u\d+a\d+/(\d+):[^\n]*" + re.escape(PACKAGE) + r"/androidx\.work\.impl\.background\.systemjob\.SystemJobService", schedule, re.MULTILINE)
         assert matches, "WorkManager job not found"
         before = len([event for event in self.events() if event["path"].startswith("/mutable.m3u")])
-        result = self.run("shell", "cmd", "jobscheduler", "run", "-f", PACKAGE, matches[0]).decode("utf-8", errors="replace")
+        namespace, job_id = matches[0]
+        command = ["shell", "cmd", "jobscheduler", "run", "-f"]
+        if namespace:
+            command.extend(["--namespace", namespace])
+        command.extend([PACKAGE, job_id])
+        result = self.run(*command).decode("utf-8", errors="replace")
         deadline = time.monotonic() + 25
         while time.monotonic() < deadline:
             after = len([event for event in self.events() if event["path"].startswith("/mutable.m3u")])
@@ -695,7 +704,7 @@ class TvSuite:
             time.sleep(0.5)
         else:
             raise AssertionError("Forced worker did not download active playlist")
-        self.record("J01", "每日任务配置与强制执行", "后台任务", "数据库中只有一个日更任务，间隔 24 小时；强制执行后确实请求了当前源。未等待真实 24 小时。", {"periodicRows": len(rows), "intervalMs": rows[0][2], "jobId": matches[0], "requestDelta": after - before, "scheduler": result.strip(), "elapsed24Hours": False})
+        self.record("J01", "每日任务配置与强制执行", "后台任务", "数据库中只有一个日更任务，间隔 24 小时；强制执行后确实请求了当前源。未等待真实 24 小时。", {"periodicRows": len(rows), "intervalMs": rows[0][2], "namespace": namespace, "jobId": job_id, "requestDelta": after - before, "scheduler": result.strip(), "elapsed24Hours": False})
 
 
 def main():

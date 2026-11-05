@@ -48,4 +48,14 @@
     <string name="channel_number">%1$03d</string>
     <string name="fullscreen">全屏</string>
     <string name="exit_fullscreen">退出全屏</string>
+    <string name="proxy_title">HTTP 代理</string>
+    <string name="proxy_on">已开启</string>
+    <string name="proxy_off">已关闭</string>
+    <string name="proxy_ip">IP 地址</string>
+    <string name="proxy_port">端口</string>
+    <string name="proxy_username">用户名（可选）</string>
+    <string name="proxy_password">密码</string>
+    <string name="proxy_save">保存</string>
+    <string name="proxy_cancel">取消</string>
+    <string name="proxy_invalid">请检查 IP、端口（1–65535）及认证信息</string>
 </resources>

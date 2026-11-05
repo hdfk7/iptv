@@ -67,7 +67,7 @@ STREAM_PROBE_TIMEOUT_MS=8000
 
 ## 自动更新和缓存
 
-进入前台刷新；唯一 WorkManager 周期任务每 24 小时在联网条件下刷新当前源，收藏模式刷新收藏贡献源。失败指数退避。Doze、断网、强制停止及厂商省电可能延迟任务，不保证准点。
+进入前台自动刷新，也可手动更新。没有每日定时任务；升级时取消旧版 daily-playlist 任务，WorkManager 依赖仅用于这项迁移清理。更新失败保留缓存和收藏。
 
 按地址哈希独立缓存，切源先显示相应缓存。旧源延迟响应不覆盖当前源，修改 URL 不混用旧地址缓存。旧版 playlist.json 可迁移到首个内置源。有效非空列表原子写入成功后才更新时间，网络、格式、空列表和写盘失败保留旧缓存。
 
@@ -88,7 +88,7 @@ STREAM_PROBE_TIMEOUT_MS=8000
 
 - app：宿主、生命周期、任务注册和遥控器事件。
 - core/model：源、节目、收藏、名称归一化及线路聚合。
-- core/data/local、network、repository、worker：原子持久化、限长下载/解析、业务规则/刷新隔离、每日任务。
+- core/data/local、network、repository：原子持久化、限长下载/解析、业务规则和刷新隔离。
 - core/ui/theme、components：主题和统一焦点组件。
 - feature/player：节目、全屏播放与收藏；feature/source：源列表、表单和删除确认。
 
@@ -97,3 +97,7 @@ Kotlin 使用显式参数和命名回调，无尾随 Lambda；界面单一根组
 24 项 JUnit 5 测试覆盖解析、名称合并/区分、线路去重、源增删改、单源激活、地址校验、跨源收藏、地址刷新、离线/重启、写盘失败、URL 缓存隔离和延迟响应竞争。Debug/Release 构建及 Lint 通过；Android 14 电视模拟器用于安装和实际界面验证，尚未在小米实体电视验证。
 
 本次模拟器验收：源新增/编辑/删除、单源切换、频道键从 CCTV1 切到 CCTV2、跨源 CCTV1 合并为一个收藏节目并汇聚 17 条不同地址、实际直播播放、全屏信息自动隐藏/INFO 和确认键唤出、唤出不误触收藏、返回列表均已验证。Debug 和 Release 的 APK 签名均与项目内对应证书匹配。机器可读验证记录在 `app/build/outputs/verification.json`。
+
+## HTTP 代理
+
+首页右上角打开“HTTP 代理”，填写 IPv4/IPv6、端口及可选用户名/密码，开启并保存。支持 HTTP 转发和 HTTPS CONNECT、Basic 代理认证，不支持 SOCKS。订阅下载、视频清单及分片均使用同一代理；保存后重连当前节目并刷新当前源。关闭后直接连接。代理故障不会静默改为直连，更新失败保留缓存。配置在本机通过 Android Keystore AES-GCM 加密保存，不备份，不输出认证信息。

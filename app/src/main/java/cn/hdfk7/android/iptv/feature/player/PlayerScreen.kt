@@ -47,10 +47,15 @@ import cn.hdfk7.android.iptv.feature.source.SourceManagerDialog
 import cn.hdfk7.android.iptv.feature.source.SourceManagerViewModel
 import java.text.DateFormat
 import java.util.Date
+import androidx.compose.ui.platform.LocalContext
+import cn.hdfk7.android.iptv.app.IptvApplication
+import cn.hdfk7.android.iptv.feature.proxy.ProxySettingsDialog
 
 @Composable
 fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var proxyOpen by remember(calculation = { mutableStateOf(false) })
+    val app = LocalContext.current.applicationContext as IptvApplication
     val firstFocus = remember(calculation = { FocusRequester() })
     val density = LocalDensity.current
     var videoBounds by remember(calculation = { mutableStateOf(Rect.Zero) })
@@ -79,7 +84,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                 FullscreenPlayer(state = state, viewModel = viewModel)
             } else {
                 Column(modifier = Modifier.fillMaxSize().padding(horizontal = 26.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = {
-                    HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus)
+                    HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onProxy = { proxyOpen = true })
                     HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                     Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp), content = {
                         ChannelPanel(state = state, onSelect = viewModel::select, onFavorite = viewModel::toggleFavorite, onRefresh = viewModel::refresh)
@@ -88,19 +93,23 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                 })
             }
             SourceManagerDialog(viewModel = sourceViewModel)
+            if (proxyOpen) {
+                ProxySettingsDialog(store = app.proxySettings, onClose = { proxyOpen = false }, onSaved = viewModel::applyProxy)
+            }
         }
     )
 }
 
 @Composable
-private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester) {
+private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onProxy: () -> Unit) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
     val source = state.sources.firstOrNull(predicate = { entry -> entry.id == state.activeSourceId })
     Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
         TvButton(label = if (favorites) stringResource(R.string.favorites) else source?.name ?: stringResource(R.string.no_source), icon = R.drawable.ic_source, onClick = sourceViewModel::open, modifier = Modifier.widthIn(max = 230.dp).focusRequester(focusRequester))
-        TvButton(label = stringResource(R.string.favorites_count, state.favoriteCount), icon = R.drawable.ic_star, selected = favorites, onClick = sourceViewModel::showFavorites)
+        TvIconButton(description = stringResource(R.string.favorites_count, state.favoriteCount), icon = R.drawable.ic_star, selected = favorites, onClick = sourceViewModel::showFavorites)
         Spacer(modifier = Modifier.weight(1f))
-        TvButton(label = stringResource(R.string.library_title), onClick = sourceViewModel::open, icon = R.drawable.ic_edit)
+        TvIconButton(description = stringResource(R.string.proxy_title), icon = R.drawable.ic_proxy, onClick = onProxy)
+        TvIconButton(description = stringResource(R.string.library_title), onClick = sourceViewModel::open, icon = R.drawable.ic_edit)
     })
 }
 
@@ -259,7 +268,7 @@ private fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp), content = {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = {
             TvIconButton(icon = R.drawable.ic_previous, description = stringResource(R.string.previous), onClick = { viewModel.changeChannel(-1) })
-            TvButton(label = stringResource(if (state.playback == PlaybackStatus.PLAYING) R.string.pause else R.string.play), icon = if (state.playback == PlaybackStatus.PLAYING) R.drawable.ic_pause else R.drawable.ic_play, onClick = viewModel::togglePlayback, selected = true)
+            TvIconButton(description = stringResource(if (state.playback == PlaybackStatus.PLAYING) R.string.pause else R.string.play), icon = if (state.playback == PlaybackStatus.PLAYING) R.drawable.ic_pause else R.drawable.ic_play, onClick = viewModel::togglePlayback, selected = true)
             TvIconButton(icon = R.drawable.ic_next, description = stringResource(R.string.next), onClick = { viewModel.changeChannel(1) })
             TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.retry), onClick = viewModel::retry)
             Spacer(modifier = Modifier.weight(1f))

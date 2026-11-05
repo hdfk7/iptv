@@ -35,7 +35,7 @@ class PlaylistRepository(
     private val download: (String) -> String,
     private val clock: () -> Long
 ) {
-    constructor(directory: File) : this(
+    constructor(directory: File, downloader: PlaylistDownloader = PlaylistDownloader()) : this(
         FileLibraryStore(directory),
         { source ->
             val digest = MessageDigest.getInstance("SHA-256").digest(source.url.toByteArray())
@@ -50,7 +50,7 @@ class PlaylistRepository(
             }
             store
         },
-        PlaylistDownloader()::download,
+        downloader::download,
         System::currentTimeMillis
     )
 
