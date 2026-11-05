@@ -202,7 +202,7 @@ class TvSuite:
     def favorites(self):
         self.main()
         count = len({channel["name"].replace(" ", "").upper() for channel in self.library()["favorites"]})
-        self.click(f"收藏源 · {count}")
+        self.click(f"收藏 · {count}")
         assert self.library()["activeSourceId"] == "favorites"
 
     def channel_star(self, name):
