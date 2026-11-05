@@ -279,7 +279,7 @@ private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, favorite
                 Text(text = if (showSource) channel.sourceName else channel.group, color = if (selected) Accent else Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             })
         })
-        TvIconButton(icon = R.drawable.ic_star, description = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add), onClick = onFavorite, tint = if (favorite) Gold else Muted, selected = favorite)
+        TvIconButton(icon = R.drawable.ic_star, description = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add), onClick = onFavorite, tint = if (favorite) Gold else Muted, selected = favorite, modifier = Modifier.onFocusChanged(onFocusChanged = { focus -> if (focus.isFocused) onFocused() }))
     })
 }
 
