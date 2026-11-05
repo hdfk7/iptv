@@ -74,8 +74,6 @@ internal fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel) {
                             TvIconButton(icon = if (state.playback == PlaybackStatus.PLAYING) R.drawable.ic_pause else R.drawable.ic_play, description = stringResource(if (state.playback == PlaybackStatus.PLAYING) R.string.pause else R.string.play), onClick = viewModel::togglePlayback)
                             TvIconButton(icon = R.drawable.ic_next, description = stringResource(R.string.next), onClick = { viewModel.changeChannel(1) })
                             TvIconButton(icon = R.drawable.ic_star, description = stringResource(if (state.selectedId in state.favoriteIds) R.string.favorite_remove else R.string.favorite_add), onClick = viewModel::toggleCurrentFavorite, modifier = Modifier.focusRequester(controlFocus), tint = if (state.selectedId in state.favoriteIds) Gold else Color.White)
-                            Spacer(modifier = Modifier.weight(1f))
-                            TvIconButton(icon = R.drawable.ic_exit_fullscreen, description = stringResource(R.string.exit_fullscreen), onClick = viewModel::exitFullscreen)
                         })
                     }
                 )

@@ -1,6 +1,13 @@
 package cn.hdfk7.android.iptv.feature.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -17,6 +24,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
@@ -56,6 +67,8 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
     var proxyOpen by remember(calculation = { mutableStateOf(false) })
     val app = LocalContext.current.applicationContext as IptvApplication
     val firstFocus = remember(calculation = { FocusRequester() })
+    val videoFocus = remember(calculation = { FocusRequester() })
+    var returningFromFullscreen by remember(calculation = { mutableStateOf(false) })
     val density = LocalDensity.current
     var videoBounds by remember(calculation = { mutableStateOf(Rect.Zero) })
     val viewportModifier = if (state.fullscreen) {
@@ -68,7 +81,11 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
     }
     BackHandler(enabled = state.fullscreen, onBack = viewModel::exitFullscreen)
     LaunchedEffect(key1 = state.fullscreen, block = {
-        if (!state.fullscreen) {
+        if (state.fullscreen) {
+            returningFromFullscreen = true
+        } else if (returningFromFullscreen) {
+            videoFocus.requestFocus()
+        } else {
             firstFocus.requestFocus()
         }
     })
@@ -87,7 +104,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                     HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                     Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp), content = {
                         ChannelPanel(state = state, onSelect = viewModel::select, onFavorite = viewModel::toggleFavorite, onRefresh = viewModel::refresh)
-                        PlaybackPanel(state = state, viewModel = viewModel, modifier = Modifier.weight(1f), onVideoBounds = { bounds -> videoBounds = bounds })
+                        PlaybackPanel(state = state, viewModel = viewModel, modifier = Modifier.weight(1f), videoFocus = videoFocus, onVideoBounds = { bounds -> videoBounds = bounds })
                     })
                 })
             }
@@ -188,7 +205,9 @@ private fun CatalogMessage(state: PlayerState) {
 }
 
 @Composable
-private fun PlaybackPanel(state: PlayerState, viewModel: PlayerViewModel, modifier: Modifier, onVideoBounds: (Rect) -> Unit) {
+private fun PlaybackPanel(state: PlayerState, viewModel: PlayerViewModel, modifier: Modifier, videoFocus: FocusRequester, onVideoBounds: (Rect) -> Unit) {
+    var videoFocused by remember(calculation = { mutableStateOf(false) })
+    val fullscreenDescription = stringResource(R.string.fullscreen)
     Column(modifier = modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp), content = {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), content = {
@@ -201,9 +220,28 @@ private fun PlaybackPanel(state: PlayerState, viewModel: PlayerViewModel, modifi
                 TvIconButton(icon = R.drawable.ic_star, description = stringResource(if (state.selectedId in state.favoriteIds) R.string.favorite_remove else R.string.favorite_add), onClick = viewModel::toggleCurrentFavorite, tint = if (state.selectedId in state.favoriteIds) Gold else Muted)
             }
         })
-        PlaybackSurface(state = state, modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned(onGloballyPositioned = { coordinates ->
-            onVideoBounds(Rect(coordinates.positionInRoot(), Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
-        }))
+        Box(modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(18.dp)).focusRequester(videoFocus).onFocusChanged(onFocusChanged = { focus -> videoFocused = focus.isFocused }).onPreviewKeyEvent(onPreviewKeyEvent = { event ->
+            val key = event.nativeKeyEvent
+            if (key.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || key.keyCode == KeyEvent.KEYCODE_ENTER || key.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                if (key.action == KeyEvent.ACTION_UP) {
+                    viewModel.enterFullscreen()
+                }
+                true
+            } else {
+                false
+            }
+        }).focusable().semantics(properties = {
+            contentDescription = fullscreenDescription
+            role = Role.Button
+            onClick(action = { viewModel.enterFullscreen(); true })
+        }).pointerInput(key1 = viewModel, block = { detectTapGestures(onTap = { viewModel.enterFullscreen() }) }), content = {
+            PlaybackSurface(state = state, modifier = Modifier.fillMaxSize().onGloballyPositioned(onGloballyPositioned = { coordinates ->
+                onVideoBounds(Rect(coordinates.positionInRoot(), Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
+            }))
+            if (videoFocused) {
+                Box(modifier = Modifier.matchParentSize().border(2.dp, Accent, RoundedCornerShape(18.dp)))
+            }
+        })
         PlaybackControls(state = state, viewModel = viewModel)
     })
 }
@@ -274,8 +312,9 @@ private fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel) {
             TvIconButton(icon = R.drawable.ic_next, description = stringResource(R.string.next), onClick = { viewModel.changeChannel(1) })
             TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.retry), onClick = viewModel::retry)
             Spacer(modifier = Modifier.weight(1f))
-            TvIconButton(icon = R.drawable.ic_fullscreen, description = stringResource(R.string.fullscreen), onClick = viewModel::enterFullscreen)
-            Text(text = if (state.line > 0) stringResource(R.string.line_detail, state.line, state.lineCount) else stringResource(R.string.live_label), fontSize = 11.sp, color = Muted)
+            if (state.line > 0) {
+                StreamLineBadge(state = state)
+            }
             TvIconButton(icon = R.drawable.ic_volume_down, description = stringResource(R.string.volume_down), onClick = { viewModel.changeVolume(android.media.AudioManager.ADJUST_LOWER) })
             TvIconButton(icon = R.drawable.ic_volume_up, description = stringResource(R.string.volume_up), onClick = { viewModel.changeVolume(android.media.AudioManager.ADJUST_RAISE) })
         })
@@ -283,4 +322,23 @@ private fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel) {
             Text(text = stringResource(R.string.fixed_volume), color = Muted, fontSize = 10.sp)
         }
     })
+}
+
+@Composable
+private fun StreamLineBadge(state: PlayerState) {
+    val statusColor = when (state.playback) {
+        PlaybackStatus.ERROR, PlaybackStatus.LOADING -> Gold
+        else -> Accent
+    }
+    Row(
+        modifier = Modifier.height(34.dp).clip(RoundedCornerShape(17.dp)).background(Color(0xFF142536)).border(1.dp, Color(0xFF2A3C50), RoundedCornerShape(17.dp)).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        content = {
+            Icon(painter = painterResource(R.drawable.ic_signal), contentDescription = stringResource(R.string.line_detail, state.line, state.lineCount), tint = statusColor, modifier = Modifier.size(16.dp))
+            Text(text = state.line.toString().padStart(2, '0'), color = statusColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Box(modifier = Modifier.width(1.dp).height(12.dp).background(Color(0xFF3A4A5D)))
+            Text(text = state.lineCount.toString().padStart(2, '0'), color = Muted, fontSize = 12.sp)
+        }
+    )
 }
