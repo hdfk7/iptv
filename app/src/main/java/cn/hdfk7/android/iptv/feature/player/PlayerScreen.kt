@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import android.view.KeyEvent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -122,7 +123,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                 FullscreenPlayer(state = state, viewModel = viewModel)
             } else {
                 Column(modifier = Modifier.fillMaxSize().padding(horizontal = 26.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = {
-                    HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onProxy = { proxyOpen = true })
+                    HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onProxy = { proxyOpen = true }, onRefresh = viewModel::refreshManually)
                     HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                     Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp), content = {
                         ChannelPanel(state = state, onSelect = viewModel::select, onRefresh = viewModel::refreshManually, requestInitialFocus = initialChannelFocusPending, onInitialFocus = { initialChannelFocusPending = false }, selectedRowFocus = selectedRowFocus)
@@ -139,7 +140,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
 }
 
 @Composable
-private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onProxy: () -> Unit) {
+private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onProxy: () -> Unit, onRefresh: () -> Unit) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
     val source = state.sources.firstOrNull(predicate = { entry -> entry.id == state.activeSourceId })
     Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
@@ -149,6 +150,7 @@ private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewMod
         }
         TvIconButton(description = stringResource(R.string.favorites_count, state.favoriteCount), icon = R.drawable.ic_star, selected = favorites, onClick = sourceViewModel::showFavorites)
         Spacer(modifier = Modifier.weight(1f))
+        TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.refresh), onClick = onRefresh)
         TvIconButton(description = stringResource(R.string.proxy_title), icon = R.drawable.ic_proxy, onClick = onProxy)
         TvIconButton(description = stringResource(R.string.library_title), onClick = sourceViewModel::open, icon = R.drawable.ic_edit)
     })
@@ -183,7 +185,6 @@ private fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, onRefr
                 if (state.refreshing) {
                     CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = Accent)
                 }
-                TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.refresh), onClick = onRefresh)
             })
             if (state.refreshFailed || state.message != null) {
                 CatalogMessage(state = state)
