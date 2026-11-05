@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -60,6 +61,9 @@ import java.util.Date
 import androidx.compose.ui.platform.LocalContext
 import cn.hdfk7.android.iptv.app.IptvApplication
 import cn.hdfk7.android.iptv.feature.proxy.ProxySettingsDialog
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 
 @Composable
 fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewModel) {
@@ -137,7 +141,21 @@ private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewMod
 private fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, onFavorite: (Channel) -> Unit, onRefresh: () -> Unit, requestInitialFocus: Boolean, onInitialFocus: () -> Unit) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
     val listState = rememberLazyListState()
+    val selectChannel: (Channel) -> Unit = { channel ->
+        if (channel.id != state.selectedId || state.playback == PlaybackStatus.IDLE || state.playback == PlaybackStatus.ERROR) {
+            onSelect(channel)
+        }
+    }
     LaunchedEffect(key1 = state.activeSourceId, block = { listState.scrollToItem(0) })
+    LaunchedEffect(key1 = state.selectedId, key2 = state.channels.size, block = {
+        val index = state.channels.indexOfFirst(predicate = { channel -> channel.id == state.selectedId })
+        if (index < 0) {
+            return@LaunchedEffect
+        }
+        val layout = snapshotFlow(block = { listState.layoutInfo }).first(predicate = { info -> info.viewportSize.height > 0 && info.visibleItemsInfo.isNotEmpty() })
+        val itemSize = layout.visibleItemsInfo.firstOrNull(predicate = { item -> item.index == index })?.size ?: layout.visibleItemsInfo.first().size
+        listState.scrollToItem(index = index, scrollOffset = -((layout.viewportSize.height - itemSize) / 2))
+    })
     Column(
         modifier = Modifier.width(264.dp).fillMaxHeight().clip(RoundedCornerShape(18.dp)).background(Color(0xCC101C2C)).border(1.dp, Color(0xFF253347), RoundedCornerShape(18.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -163,7 +181,7 @@ private fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, onFavo
             } else {
                 LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp), content = {
                     itemsIndexed(items = state.channels, key = { _, channel -> channel.id }, itemContent = { index, channel ->
-                        ChannelRow(channel = channel, index = index, selected = channel.id == state.selectedId, favorite = channel.id in state.favoriteIds, showSource = favorites, requestFocus = requestInitialFocus && index == 0, onInitialFocus = onInitialFocus, onSelect = { onSelect(channel) }, onFavorite = { onFavorite(channel) })
+                        ChannelRow(channel = channel, index = index, selected = channel.id == state.selectedId, favorite = channel.id in state.favoriteIds, showSource = favorites, requestFocus = requestInitialFocus && index == 0, onInitialFocus = onInitialFocus, onFocused = { selectChannel(channel) }, onSelect = { selectChannel(channel) }, onFavorite = { onFavorite(channel) })
                     })
                 })
             }
@@ -172,16 +190,24 @@ private fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, onFavo
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, favorite: Boolean, showSource: Boolean, requestFocus: Boolean, onInitialFocus: () -> Unit, onSelect: () -> Unit, onFavorite: () -> Unit) {
+private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, favorite: Boolean, showSource: Boolean, requestFocus: Boolean, onInitialFocus: () -> Unit, onFocused: () -> Unit, onSelect: () -> Unit, onFavorite: () -> Unit) {
     val channelFocus = remember(calculation = { FocusRequester() })
+    val view = LocalView.current
     LaunchedEffect(key1 = requestFocus, block = {
-        if (requestFocus) {
-            channelFocus.requestFocus()
-            onInitialFocus()
+        if (!requestFocus) {
+            return@LaunchedEffect
         }
+        var waited = 0
+        while (isActive && !view.hasWindowFocus() && waited < 3000) {
+            delay(50)
+            waited += 50
+        }
+        withFrameNanos { }
+        runCatching { channelFocus.requestFocus() }
+        onInitialFocus()
     })
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), content = {
-        TvAction(modifier = Modifier.weight(1f).height(58.dp).focusRequester(channelFocus), onClick = onSelect, selected = selected, content = {
+        TvAction(modifier = Modifier.weight(1f).height(58.dp).focusRequester(channelFocus).onFocusChanged(onFocusChanged = { focus -> if (focus.isFocused) onFocused() }), onClick = onSelect, selected = selected, content = {
             Text(text = stringResource(R.string.channel_number, index + 1), fontSize = 10.sp, color = if (selected) Accent else Muted, modifier = Modifier.width(25.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), content = {
                 Text(text = channel.name, color = Color.White, fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)

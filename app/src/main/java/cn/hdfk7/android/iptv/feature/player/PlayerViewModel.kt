@@ -84,6 +84,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (catalog.loaded) {
                     catalogToken = token
                 }
+                if (activeChannel == null && catalog.channels.isNotEmpty()) {
+                    select(channel = catalog.channels.first())
+                }
                 if (switched) {
                     refreshJob?.cancel()
                     refresh()
@@ -125,7 +128,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun exitFullscreen() {
         infoTimer?.cancel()
         mutableState.value = state.value.copy(fullscreen = false, infoVisible = false)
-        stopStream()
     }
 
     fun showInformation() {
@@ -247,13 +249,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         timeout?.cancel()
         activeChannel = channel
         streamIndex = 0
+        wantsPlayback = true
         mutableState.value = state.value.copy(selectedId = channel.id, selectedName = channel.name, selectedSourceName = channel.sourceName)
-        if (state.value.fullscreen) {
-            wantsPlayback = true
-            playLine()
-        } else {
-            stopStream()
-        }
+        playLine()
         showInformation()
     }
 
@@ -279,12 +277,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun togglePlayback() {
-        if (!state.value.fullscreen) {
-            enterFullscreen()
-            return
-        }
         showInformation()
         if (activeChannel == null) {
+            val first = state.value.channels.firstOrNull() ?: return
+            select(channel = first)
             return
         }
         if (state.value.playback == PlaybackStatus.ERROR) {
@@ -302,14 +298,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun setPlayback(playing: Boolean) {
-        if (!state.value.fullscreen) {
-            if (playing) {
-                enterFullscreen()
-            }
-            return
-        }
         showInformation()
-        if (activeChannel == null) {
+        if (playing && activeChannel == null) {
+            val first = state.value.channels.firstOrNull() ?: return
+            select(channel = first)
             return
         }
         if (playing && state.value.playback == PlaybackStatus.ERROR) {
