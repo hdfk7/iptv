@@ -3,6 +3,7 @@ package cn.hdfk7.android.iptv.feature.player
 import android.app.Application
 import android.content.Context
 import android.media.AudioManager
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -38,6 +39,10 @@ import kotlinx.coroutines.launch
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+    private companion object {
+        const val INFORMATION_TIMEOUT_MS = 6000L
+    }
+
     private val app = application as IptvApplication
     private val repository = app.playlistRepository
     private val audio = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -57,10 +62,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var generation = 0
     private var refreshJob: Job? = null
     private var infoTimer: Job? = null
+    private var informationHeld = false
+    private var informationDeadline = 0L
     private var catalogToken: String? = null
 
     init {
         viewModelScope.launch(block = {
+            var previousFavorites: List<Channel> = emptyList()
+            var favoriteIds: Set<String> = emptySet()
             repository.state.collect(collector = { catalog ->
                 val source = catalog.library.sources.firstOrNull(predicate = { entry -> entry.id == catalog.library.activeSourceId })
                 val token = "${catalog.library.activeSourceId}:${source?.url.orEmpty()}"
@@ -78,12 +87,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     activeChannel = playing.copy(name = current.name, sourceName = current.sourceName)
                 }
                 val snapshot = catalog.updatedAt
+                val favorites = catalog.library.favorites
+                if (favorites != previousFavorites) {
+                    favoriteIds = (favorites + ChannelAggregation.merge(favorites, SourceLibrary.FAVORITES_ID))
+                        .map(transform = { channel -> channel.id }).toSet()
+                    previousFavorites = favorites
+                }
                 mutableState.value = state.value.copy(
                     channels = catalog.channels,
                     sources = catalog.library.sources,
                     activeSourceId = catalog.library.activeSourceId,
-                    favoriteIds = (catalog.library.favorites + ChannelAggregation.merge(catalog.library.favorites, SourceLibrary.FAVORITES_ID)).map(transform = { channel -> channel.id }).toSet(),
-                    favoriteCount = catalog.library.favorites.distinctBy(selector = { channel -> channel.key }).size,
+                    favoriteIds = favoriteIds,
                     selectedName = activeChannel?.name,
                     selectedSourceName = activeChannel?.sourceName,
                     updatedAt = snapshot,
@@ -126,7 +140,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (refreshJob?.isActive == true) {
             return
         }
-        state.value.channels.firstOrNull()?.let { channel -> select(channel = channel) }
         refresh()
     }
 
@@ -144,15 +157,38 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun showInformation() {
-        if (!state.value.fullscreen) {
+        if (!state.value.infoVisible) {
+            mutableState.value = state.value.copy(infoVisible = true)
+        }
+        informationDeadline = SystemClock.elapsedRealtime() + INFORMATION_TIMEOUT_MS
+        if (informationHeld || infoTimer?.isActive == true) {
             return
         }
-        mutableState.value = state.value.copy(infoVisible = true)
-        infoTimer?.cancel()
         infoTimer = viewModelScope.launch(block = {
-            delay(6000)
+            var remaining = informationDeadline - SystemClock.elapsedRealtime()
+            while (remaining > 0) {
+                delay(remaining)
+                remaining = informationDeadline - SystemClock.elapsedRealtime()
+            }
             mutableState.value = state.value.copy(infoVisible = false)
         })
+    }
+
+    fun holdInformation(held: Boolean) {
+        if (informationHeld == held) {
+            return
+        }
+        informationHeld = held
+        if (held) {
+            infoTimer?.cancel()
+        } else if (state.value.infoVisible) {
+            showInformation()
+        }
+    }
+
+    fun hideInformation() {
+        infoTimer?.cancel()
+        mutableState.value = state.value.copy(infoVisible = false)
     }
 
     fun toggleFavorite(channel: Channel) {

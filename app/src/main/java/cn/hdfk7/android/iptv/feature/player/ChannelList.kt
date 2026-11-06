@@ -64,17 +64,20 @@ private object NoFocusScrollSpec : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
 }
 
-internal class ChannelListFocus(val memory: ChannelFocusMemory) {
+class ChannelListFocus(val memory: ChannelFocusMemory) {
     val requesters = mutableStateMapOf<String, FocusRequester>()
     var restore: (() -> Unit)? = null
     var focusSelected: (() -> Unit)? = null
+    var focusTop: (() -> Unit)? = null
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modifier: Modifier, compact: Boolean, television: Boolean, requestInitialFocus: Boolean, onInitialFocus: () -> Unit, selectedRowFocus: ChannelListFocus, videoFocus: FocusRequester) {
+fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modifier: Modifier, compact: Boolean, television: Boolean, requestInitialFocus: Boolean, onInitialFocus: () -> Unit, selectedRowFocus: ChannelListFocus, videoFocus: FocusRequester, onConfirmSelect: (() -> Unit)? = null, onRight: (() -> Unit)? = null, onLeftToHeader: (() -> Unit)? = null, onTopBoundary: (() -> Unit)? = null, onBottomBoundary: (() -> Unit)? = null) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
-    val selectedIndex = state.channels.indexOfFirst(predicate = { channel -> channel.id == state.selectedId })
+    val selectedIndex = remember(state.channels, state.selectedId, calculation = {
+        state.channels.indexOfFirst(predicate = { channel -> channel.id == state.selectedId })
+    })
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex.coerceAtLeast(0))
     val scope = rememberCoroutineScope()
     var focusSelection by remember(calculation = { mutableStateOf<Job?>(null) })
@@ -173,7 +176,17 @@ internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modif
                             return@onPreviewKeyEvent false
                         }
                         val targetIndex = focusedIndex + step
-                        val target = state.channels.getOrNull(targetIndex) ?: return@onPreviewKeyEvent false
+                        val target = state.channels.getOrNull(targetIndex)
+                        if (target == null) {
+                            val boundary = if (step < 0) onTopBoundary else onBottomBoundary
+                            if (boundary == null) {
+                                return@onPreviewKeyEvent false
+                            }
+                            if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0 && pendingFocusMove?.isActive != true) {
+                                boundary()
+                            }
+                            return@onPreviewKeyEvent true
+                        }
                         if (event.type == KeyEventType.KeyDown && pendingFocusMove?.isActive != true) {
                             focusSelection?.cancel()
                             if (listState.isItemFullyVisible(targetIndex) && selectedRowFocus.requesters[target.id]?.requestFocus() == true) {
@@ -191,7 +204,7 @@ internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modif
                         true
                     }), verticalArrangement = Arrangement.spacedBy(6.dp), content = {
                         itemsIndexed(items = state.channels, key = { _, channel -> channel.id }, itemContent = { index, channel ->
-                            ChannelRow(channel = channel, index = index, television = television, selected = { focusedIndex < 0 && !listHasFocus && channel.id == state.selectedId }, highlighted = { focusedIndex == index }, showSource = favorites, requestFocus = requestInitialFocus && index == 0, selectedRowFocus = selectedRowFocus, onInitialFocus = onInitialFocus, onVideoFocus = { commitChannel(channel); videoFocus.requestFocus() }, onFocused = {
+                            ChannelRow(channel = channel, index = index, television = television, selected = { focusedIndex < 0 && !listHasFocus && channel.id == state.selectedId }, highlighted = { focusedIndex == index }, showSource = favorites, requestFocus = requestInitialFocus && index == 0, selectedRowFocus = selectedRowFocus, onInitialFocus = onInitialFocus, onVideoFocus = { commitChannel(channel); if (onRight != null) { onRight() } else { videoFocus.requestFocus() } }, onLeftToHeader = onLeftToHeader, onFocused = {
                                 focusedIndex = index
                                 if (enteringList) {
                                     enteringList = false
@@ -207,6 +220,7 @@ internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modif
                             }, onSelect = {
                                 val moveToVideo = television && channel.id == state.selectedId
                                 commitChannel(channel)
+                                onConfirmSelect?.invoke()
                                 if (moveToVideo) {
                                     videoFocus.requestFocus()
                                 }
@@ -244,7 +258,7 @@ private suspend fun LazyListState.revealItem(index: Int) {
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, index: Int, television: Boolean, selected: () -> Boolean, highlighted: () -> Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: ChannelListFocus, onInitialFocus: () -> Unit, onVideoFocus: () -> Unit, onFocused: () -> Unit, onSelect: () -> Unit) {
+private fun ChannelRow(channel: Channel, index: Int, television: Boolean, selected: () -> Boolean, highlighted: () -> Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: ChannelListFocus, onInitialFocus: () -> Unit, onVideoFocus: () -> Unit, onLeftToHeader: (() -> Unit)?, onFocused: () -> Unit, onSelect: () -> Unit) {
     val channelFocus = remember(calculation = { FocusRequester() })
     val view = LocalView.current
     val inputMode = LocalInputModeManager.current
@@ -296,6 +310,11 @@ private fun ChannelRow(channel: Channel, index: Int, television: Boolean, select
             if (event.key == Key.DirectionRight) {
                 if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                     onVideoFocus()
+                }
+                true
+            } else if (event.key == Key.DirectionLeft) {
+                if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0 && onLeftToHeader != null) {
+                    onLeftToHeader()
                 }
                 true
             } else {

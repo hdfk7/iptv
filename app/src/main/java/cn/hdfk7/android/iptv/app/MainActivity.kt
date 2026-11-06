@@ -8,14 +8,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.ui.theme.IptvTheme
 import cn.hdfk7.android.iptv.feature.source.SourceManagerViewModel
 import cn.hdfk7.android.iptv.feature.player.PlayerScreen
@@ -25,11 +28,17 @@ class MainActivity : ComponentActivity() {
     private val viewModel: PlayerViewModel by viewModels()
     private val sourceViewModel: SourceManagerViewModel by viewModels()
     private var fullscreenBackPressed = false
+    private var television = false
+    private var lastBackPressTime = 0L
+
+    private companion object {
+        const val DOUBLE_BACK_INTERVAL_MS = 2000L
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val television = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+        television = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
         if (television) {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         }
@@ -74,16 +83,47 @@ class MainActivity : ComponentActivity() {
     // Intercept TV BACK before focused Compose controls; this is Activity's public callback.
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && (viewModel.state.value.fullscreen || fullscreenBackPressed)) {
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                fullscreenBackPressed = true
-                viewModel.exitFullscreen()
-            } else if (event.action == KeyEvent.ACTION_UP) {
-                fullscreenBackPressed = false
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (television) {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastBackPressTime < DOUBLE_BACK_INTERVAL_MS) {
+                        finish()
+                    } else {
+                        lastBackPressTime = now
+                        showBackToast()
+                    }
+                }
+                return true
             }
-            return true
+            if (viewModel.state.value.fullscreen || fullscreenBackPressed) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    fullscreenBackPressed = true
+                    viewModel.exitFullscreen()
+                } else if (event.action == KeyEvent.ACTION_UP) {
+                    fullscreenBackPressed = false
+                }
+                return true
+            }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun showBackToast() {
+        val text = android.widget.TextView(this)
+        text.text = getString(R.string.press_back_again)
+        text.setTextColor(android.graphics.Color.WHITE)
+        text.textSize = 15f
+        val padding = (16 * resources.displayMetrics.density).toInt()
+        text.setPadding(padding, padding / 2, padding, padding / 2)
+        text.background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xE6202630.toInt())
+            cornerRadius = 12f * resources.displayMetrics.density
+        }
+        val toast = Toast(this)
+        toast.duration = Toast.LENGTH_SHORT
+        toast.view = text
+        toast.show()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

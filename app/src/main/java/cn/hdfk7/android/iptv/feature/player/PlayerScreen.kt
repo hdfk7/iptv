@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -40,6 +39,8 @@ import cn.hdfk7.android.iptv.core.ui.components.LocalTvActionFocused
 import cn.hdfk7.android.iptv.core.ui.components.TvAction
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 import cn.hdfk7.android.iptv.core.ui.theme.*
+import cn.hdfk7.android.iptv.feature.phone.PhonePlayerScreen
+import cn.hdfk7.android.iptv.feature.tv.TvPlayerScreen
 import cn.hdfk7.android.iptv.feature.proxy.ProxySettingsDialog
 import cn.hdfk7.android.iptv.feature.update.AppUpdateDialog
 import cn.hdfk7.android.iptv.feature.source.SourceManagerDialog
@@ -55,10 +56,9 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
     val selectedRowFocus = remember(key1 = viewModel, calculation = { ChannelListFocus(viewModel.channelFocusMemory) })
     var initialChannelFocusPending by remember(calculation = { mutableStateOf(true) })
     val videoFocus = remember(calculation = { FocusRequester() })
-    var returningFromFullscreen by remember(calculation = { mutableStateOf(false) })
     val density = LocalDensity.current
     var videoBounds by remember(calculation = { mutableStateOf(Rect.Zero) })
-    val viewportModifier = if (state.fullscreen) {
+    val viewportModifier = if (state.fullscreen || television) {
         Modifier.fillMaxSize()
     } else {
         Modifier.offset(offset = { IntOffset(videoBounds.left.toInt(), videoBounds.top.toInt()) }).size(
@@ -70,79 +70,45 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
     LaunchedEffect(key1 = state.activeSourceId, key2 = sourceAddress, block = {
         initialChannelFocusPending = true
     })
-    BackHandler(enabled = state.fullscreen, onBack = viewModel::exitFullscreen)
-    LaunchedEffect(key1 = state.fullscreen, block = {
-        if (!television) {
-            return@LaunchedEffect
-        }
-        if (state.fullscreen) {
-            returningFromFullscreen = true
-        } else if (returningFromFullscreen) {
-            videoFocus.requestFocus()
-        } else if (state.channels.isEmpty()) {
-            firstFocus.requestFocus()
+    val dialogOpen = sourceUi.open || settingsPage != null
+    LaunchedEffect(television, dialogOpen, block = {
+        if (television) {
+            viewModel.holdInformation(dialogOpen)
         }
     })
+    BackHandler(enabled = state.fullscreen, onBack = viewModel::exitFullscreen)
     Box(
         modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(BackdropTop, BackdropMiddle, BackdropBottom))),
         content = {
             // Keep one native video output attached while only changing its bounds.
-            Box(modifier = viewportModifier.clip(RoundedCornerShape(if (state.fullscreen) 0.dp else 18.dp)).background(Color.Black), content = {
+            Box(modifier = viewportModifier.clip(RoundedCornerShape(if (state.fullscreen || television) 0.dp else 18.dp)).background(Color.Black), content = {
                 PlaybackVideo(viewModel = viewModel)
             })
-            if (state.fullscreen) {
-                FullscreenPlayer(state = state, viewModel = viewModel, touchControls = !television)
+            if (television) {
+                TvPlayerScreen(
+                    state = state,
+                    viewModel = viewModel,
+                    sourceViewModel = sourceViewModel,
+                    onSettings = { settingsPage = SettingsPage.Menu },
+                    firstFocus = firstFocus,
+                    selectedRowFocus = selectedRowFocus,
+                    videoFocus = videoFocus,
+                    dialogOpen = dialogOpen,
+                    initialChannelFocusPending = initialChannelFocusPending && !sourceUi.open && settingsPage == null,
+                    onInitialFocus = { initialChannelFocusPending = false }
+                )
             } else {
-                BoxWithConstraints(modifier = Modifier.fillMaxSize(), content = {
-                    val narrowTv = television && maxWidth < 820.dp
-                    val stacked = !television && maxHeight > maxWidth
-                    val previewHeight = if (stacked) minOf((maxWidth - 24.dp) * (9f / 16f), maxHeight * 0.36f) else null
-                    val listWidth = minOf(264.dp, maxWidth * if (television) 0.28f else 0.32f)
-                    val channels: @Composable (Modifier) -> Unit = { modifier ->
-                        ChannelPanel(
-                            state = state,
-                            onSelect = viewModel::select,
-                            modifier = modifier,
-                            compact = !television,
-                            television = television,
-                            requestInitialFocus = television && initialChannelFocusPending && !sourceUi.open && settingsPage == null,
-                            onInitialFocus = { initialChannelFocusPending = false },
-                            selectedRowFocus = selectedRowFocus,
-                            videoFocus = videoFocus
-                        )
-                    }
-                    val playback: @Composable (Modifier) -> Unit = { modifier ->
-                        PlaybackPanel(
-                            state = state,
-                            viewModel = viewModel,
-                            modifier = modifier,
-                            videoFocus = videoFocus,
-                            selectedRowFocus = selectedRowFocus,
-                            onVideoBounds = { bounds -> videoBounds = bounds },
-                            touchControls = !television,
-                            previewHeight = previewHeight,
-                            narrowTv = narrowTv
-                        )
-                    }
-                    val pageInsets = if (television) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
-                    Column(
-                        modifier = Modifier.fillMaxSize().then(pageInsets).padding(horizontal = if (television && !narrowTv) 26.dp else 12.dp, vertical = if (television && !narrowTv) 20.dp else 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(if (television && !narrowTv) 16.dp else 8.dp),
-                        content = {
-                            HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onSettings = { settingsPage = SettingsPage.Menu }, onRefresh = viewModel::refreshManually, compact = !television || narrowTv, selectedRowFocus = selectedRowFocus)
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
-                            if (stacked) {
-                                playback(Modifier.fillMaxWidth())
-                                channels(Modifier.weight(1f).fillMaxWidth())
-                            } else {
-                                Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(if (television && !narrowTv) 20.dp else 10.dp), content = {
-                                    channels(Modifier.width(listWidth).fillMaxHeight())
-                                    playback(Modifier.weight(1f).fillMaxHeight())
-                                })
-                            }
-                        }
-                    )
-                })
+                PhonePlayerScreen(
+                    state = state,
+                    viewModel = viewModel,
+                    sourceViewModel = sourceViewModel,
+                    onSettings = { settingsPage = SettingsPage.Menu },
+                    firstFocus = firstFocus,
+                    selectedRowFocus = selectedRowFocus,
+                    videoFocus = videoFocus,
+                    onVideoBounds = { bounds -> videoBounds = bounds },
+                    onInitialFocus = { initialChannelFocusPending = false }
+                )
             }
             SourceManagerDialog(viewModel = sourceViewModel)
             when (settingsPage) {
@@ -167,7 +133,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
 }
 
 @Composable
-private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onSettings: () -> Unit, onRefresh: () -> Unit, compact: Boolean, selectedRowFocus: ChannelListFocus) {
+fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onSettings: () -> Unit, onRefresh: () -> Unit, compact: Boolean, selectedRowFocus: ChannelListFocus, modifier: Modifier = Modifier, topFocus: FocusRequester? = null, settingsFocus: FocusRequester? = null, sourceNavigation: Modifier? = null, refreshNavigation: Modifier = Modifier, settingsNavigation: Modifier = Modifier) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
     val source = state.sources.firstOrNull(predicate = { entry -> entry.id == state.activeSourceId })
     val downToList = if (state.channels.isEmpty()) {
@@ -185,8 +151,8 @@ private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewMod
         })
     }
     val sourceTitle = if (favorites) stringResource(R.string.favorites) else source?.name ?: stringResource(R.string.library_title)
-    Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp), content = {
-        TvAction(onClick = sourceViewModel::open, modifier = Modifier.focusRequester(focusRequester).then(downToList).widthIn(max = if (compact) 210.dp else 300.dp), containerColor = ButtonPanel, contentPadding = PaddingValues(horizontal = 14.dp), content = {
+    Row(modifier = modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp), content = {
+        TvAction(onClick = sourceViewModel::open, modifier = Modifier.focusRequester(focusRequester).then(sourceNavigation ?: downToList).widthIn(max = if (compact) 210.dp else 300.dp), containerColor = ButtonPanel, contentPadding = PaddingValues(horizontal = 14.dp), content = {
             Text(text = sourceTitle, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
@@ -197,8 +163,8 @@ private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewMod
             )
         })
         Spacer(modifier = Modifier.weight(1f))
-        TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.refresh), onClick = onRefresh)
-        TvIconButton(description = stringResource(R.string.settings_title), icon = R.drawable.ic_settings, onClick = onSettings)
+        TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.refresh), onClick = onRefresh, modifier = (if (topFocus != null) Modifier.focusRequester(topFocus) else Modifier).then(refreshNavigation))
+        TvIconButton(description = stringResource(R.string.settings_title), icon = R.drawable.ic_settings, onClick = onSettings, modifier = (if (settingsFocus != null) Modifier.focusRequester(settingsFocus) else Modifier).then(settingsNavigation))
     })
 }
 

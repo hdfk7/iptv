@@ -48,10 +48,11 @@ import androidx.compose.ui.unit.sp
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.ui.components.TvAction
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
+import cn.hdfk7.android.iptv.core.ui.components.tvDirections
 import cn.hdfk7.android.iptv.core.ui.theme.*
 
 @Composable
-internal fun PlaybackPanel(state: PlayerState, viewModel: PlayerViewModel, modifier: Modifier, videoFocus: FocusRequester, selectedRowFocus: ChannelListFocus, onVideoBounds: (Rect) -> Unit, touchControls: Boolean, previewHeight: Dp?, narrowTv: Boolean) {
+fun PlaybackPanel(state: PlayerState, viewModel: PlayerViewModel, modifier: Modifier, videoFocus: FocusRequester, selectedRowFocus: ChannelListFocus, onVideoBounds: (Rect) -> Unit, touchControls: Boolean, previewHeight: Dp?, narrowTv: Boolean) {
     var videoFocused by remember(calculation = { mutableStateOf(false) })
     val fullscreenDescription = stringResource(R.string.fullscreen)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(if (touchControls) 8.dp else 12.dp), content = {
@@ -112,8 +113,8 @@ internal fun PlaybackPanel(state: PlayerState, viewModel: PlayerViewModel, modif
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-internal fun PlaybackSurface(state: PlayerState, modifier: Modifier) {
-    val frameModifier = if (state.fullscreen) {
+fun PlaybackSurface(state: PlayerState, modifier: Modifier, framed: Boolean = true) {
+    val frameModifier = if (state.fullscreen || !framed) {
         modifier
     } else {
         modifier.clip(RoundedCornerShape(18.dp)).border(1.dp, Border, RoundedCornerShape(18.dp))
@@ -162,32 +163,96 @@ private fun playbackMessage(state: PlayerState): String {
 }
 
 @Composable
-private fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel, selectedRowFocus: ChannelListFocus, touchControls: Boolean, narrowTv: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp), content = {
+fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel, selectedRowFocus: ChannelListFocus, touchControls: Boolean, narrowTv: Boolean, modifier: Modifier = Modifier, controlsFocus: FocusRequester? = null, onLeft: (() -> Unit)? = null, volumeUpFocus: FocusRequester? = null, onSettingsUp: (() -> Unit)? = null) {
+    val tvFocus = remember(calculation = { List(8, init = { _ -> FocusRequester() }) })
+    val lineButtonsEnabled = !narrowTv && state.line > 0 && state.lineCount > 1
+    val focusOrder = if (lineButtonsEnabled) listOf(0, 1, 2, 3, 4, 5, 6, 7) else listOf(0, 1, 2, 3, 6, 7)
+    val focusTargets = tvFocus.mapIndexed(transform = { index, requester ->
+        when (index) {
+            0 -> controlsFocus ?: requester
+            7 -> volumeUpFocus ?: requester
+            else -> requester
+        }
+    })
+    val navigation: (Int) -> Modifier = { index ->
+        if (controlsFocus == null) {
+            Modifier
+        } else {
+            val position = focusOrder.indexOf(index)
+            Modifier.focusRequester(focusTargets[index]).tvDirections(
+                up = when (index) {
+                    in 0..3 -> ({
+                        selectedRowFocus.restore?.invoke()
+                        Unit
+                    })
+                    else -> onSettingsUp
+                },
+                left = {
+                    if (index == 0) {
+                        onLeft?.invoke()
+                    } else {
+                        focusOrder.getOrNull(position - 1)?.let(block = { target -> focusTargets[target].requestFocus() })
+                    }
+                },
+                right = {
+                    if (position >= 0) {
+                        focusOrder.getOrNull(position + 1)?.let(block = { target -> focusTargets[target].requestFocus() })
+                    }
+                }
+            )
+        }
+    }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(5.dp), content = {
         val controls = if (touchControls) Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()) else Modifier.fillMaxWidth()
         Row(modifier = controls, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (narrowTv) 6.dp else 8.dp), content = {
-            TvIconButton(icon = R.drawable.ic_previous, description = stringResource(R.string.previous), onClick = { viewModel.changeChannel(-1) }, modifier = Modifier.onPreviewKeyEvent(onPreviewKeyEvent = { event ->
-                if (event.key == Key.DirectionLeft) {
-                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
-                        selectedRowFocus.restore?.invoke()
+            TvIconButton(icon = R.drawable.ic_previous, description = stringResource(R.string.previous), onClick = { viewModel.changeChannel(-1) }, modifier = navigation(0).onPreviewKeyEvent(onPreviewKeyEvent = { event ->
+                when (event.key) {
+                    Key.DirectionLeft -> {
+                        if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                            if (onLeft != null) {
+                                onLeft()
+                            } else {
+                                selectedRowFocus.restore?.invoke()
+                            }
+                        }
+                        true
                     }
-                    true
-                } else {
-                    false
+                    Key.DirectionUp -> {
+                        if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                            selectedRowFocus.restore?.invoke()
+                        }
+                        true
+                    }
+                    else -> {
+                        false
+                    }
                 }
             }))
-            TvIconButton(description = stringResource(if (state.playback == PlaybackStatus.PLAYING) R.string.pause else R.string.play), icon = if (state.playback == PlaybackStatus.PLAYING) R.drawable.ic_pause else R.drawable.ic_play, onClick = viewModel::togglePlayback, selected = true)
-            TvIconButton(icon = R.drawable.ic_next, description = stringResource(R.string.next), onClick = { viewModel.changeChannel(1) })
-            TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.retry_current_line), onClick = viewModel::retryCurrentLine)
+            TvIconButton(description = stringResource(if (state.playback == PlaybackStatus.PLAYING) R.string.pause else R.string.play), icon = if (state.playback == PlaybackStatus.PLAYING) R.drawable.ic_pause else R.drawable.ic_play, onClick = viewModel::togglePlayback, selected = true, modifier = navigation(1))
+            TvIconButton(icon = R.drawable.ic_next, description = stringResource(R.string.next), onClick = { viewModel.changeChannel(1) }, modifier = navigation(2))
+            TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.retry_current_line), onClick = viewModel::retryCurrentLine, modifier = navigation(3))
             if (!touchControls) {
                 Spacer(modifier = Modifier.weight(1f))
             }
             if (!narrowTv && state.line > 0) {
-                StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine)
+                StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine, previousModifier = navigation(4), nextModifier = navigation(5))
             }
             if (!touchControls) {
-                TvIconButton(icon = R.drawable.ic_volume_down, description = stringResource(R.string.volume_down), onClick = { viewModel.changeVolume(android.media.AudioManager.ADJUST_LOWER) })
-                TvIconButton(icon = R.drawable.ic_volume_up, description = stringResource(R.string.volume_up), onClick = { viewModel.changeVolume(android.media.AudioManager.ADJUST_RAISE) })
+                TvIconButton(icon = R.drawable.ic_volume_down, description = stringResource(R.string.volume_down), onClick = { viewModel.changeVolume(android.media.AudioManager.ADJUST_LOWER) }, modifier = navigation(6))
+                TvIconButton(icon = R.drawable.ic_volume_up, description = stringResource(R.string.volume_up), onClick = { viewModel.changeVolume(android.media.AudioManager.ADJUST_RAISE) }, modifier = navigation(7).onPreviewKeyEvent(onPreviewKeyEvent = { event ->
+                    if (event.key == Key.DirectionUp) {
+                        if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                            if (onSettingsUp != null) {
+                                onSettingsUp()
+                            } else {
+                                selectedRowFocus.focusTop?.invoke()
+                            }
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }))
             }
         })
         if (state.fixedVolume) {
@@ -197,7 +262,7 @@ private fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel, sel
 }
 
 @Composable
-internal fun StreamLineBadge(state: PlayerState, onSwitch: (Int) -> Unit) {
+fun StreamLineBadge(state: PlayerState, onSwitch: (Int) -> Unit, previousModifier: Modifier = Modifier, nextModifier: Modifier = Modifier) {
     val statusColor = when (state.playback) {
         PlaybackStatus.ERROR, PlaybackStatus.LOADING -> Gold
         else -> Accent
@@ -211,7 +276,7 @@ internal fun StreamLineBadge(state: PlayerState, onSwitch: (Int) -> Unit) {
             val previousLine = stringResource(R.string.previous_line)
             TvAction(
                 onClick = { onSwitch(-1) },
-                modifier = Modifier.width(48.dp).semantics(properties = { contentDescription = previousLine }),
+                modifier = previousModifier.width(48.dp).semantics(properties = { contentDescription = previousLine }),
                 shape = RoundedCornerShape(topStart = 23.dp, bottomStart = 23.dp),
                 enabled = enabled,
                 containerColor = Color.Transparent,
@@ -227,7 +292,7 @@ internal fun StreamLineBadge(state: PlayerState, onSwitch: (Int) -> Unit) {
                 onClick = { onSwitch(1) },
                 shape = RoundedCornerShape(topEnd = 23.dp, bottomEnd = 23.dp),
                 enabled = enabled,
-                modifier = Modifier.width(48.dp).semantics(properties = { contentDescription = nextLine }),
+                modifier = nextModifier.width(48.dp).semantics(properties = { contentDescription = nextLine }),
                 containerColor = Color.Transparent,
                 showUnfocusedBorder = false,
                 contentPadding = PaddingValues(horizontal = 8.dp),

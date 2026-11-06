@@ -11,7 +11,6 @@ data class PlayerState(
     val sources: List<PlaylistSource> = emptyList(),
     val activeSourceId: String = SourceLibrary.FAVORITES_ID,
     val favoriteIds: Set<String> = emptySet(),
-    val favoriteCount: Int = 0,
     val selectedId: String? = null,
     val selectedName: String? = null,
     val selectedSourceName: String? = null,

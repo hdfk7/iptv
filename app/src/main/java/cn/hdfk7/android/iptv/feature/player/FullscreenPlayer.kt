@@ -34,7 +34,7 @@ import cn.hdfk7.android.iptv.core.ui.theme.Muted
 import cn.hdfk7.android.iptv.core.ui.theme.DialogSurface
 
 @Composable
-internal fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel, touchControls: Boolean) {
+fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel, touchControls: Boolean) {
     val inputMode = LocalInputModeManager.current
     val surfaceFocus = remember(calculation = { FocusRequester() })
     val controlFocus = remember(calculation = { FocusRequester() })
