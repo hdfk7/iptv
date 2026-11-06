@@ -12,13 +12,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -49,7 +49,7 @@ import cn.hdfk7.android.iptv.feature.source.SourceManagerDialog
 import cn.hdfk7.android.iptv.feature.source.SourceManagerViewModel
 
 @Composable
-fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewModel, television: Boolean) {
+fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewModel, television: Boolean, onDialogStateChanged: (Boolean) -> Unit): Unit {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sourceUi by sourceViewModel.state.collectAsStateWithLifecycle()
     var settingsPage by remember(calculation = { mutableStateOf<SettingsPage?>(null) })
@@ -73,12 +73,18 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
         initialChannelFocusPending = true
     })
     val dialogOpen = sourceUi.open || settingsPage != null
+    LaunchedEffect(key1 = dialogOpen, block = {
+        onDialogStateChanged(dialogOpen)
+    })
     LaunchedEffect(television, dialogOpen, block = {
         if (television) {
             viewModel.holdInformation(dialogOpen)
         }
     })
     BackHandler(enabled = state.fullscreen, onBack = viewModel::exitFullscreen)
+    BackHandler(enabled = settingsPage != null, onBack = {
+        settingsPage = if (settingsPage == SettingsPage.Menu) null else SettingsPage.Menu
+    })
     Box(
         modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(BackdropTop, BackdropMiddle, BackdropBottom))),
         content = {
@@ -173,27 +179,26 @@ fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focu
 private enum class SettingsPage { Menu, Proxy, Update }
 
 @Composable
-private fun HomeSettingsDialog(onClose: () -> Unit, onProxy: () -> Unit, onUpdate: () -> Unit, television: Boolean) {
+private fun HomeSettingsDialog(onClose: () -> Unit, onProxy: () -> Unit, onUpdate: () -> Unit, television: Boolean): Unit {
     val closeFocus = remember(calculation = { FocusRequester() })
     val proxyFocus = remember(calculation = { FocusRequester() })
     val updateFocus = remember(calculation = { FocusRequester() })
-    Dialog(onDismissRequest = onClose, content = {
+    SettingsMenuContainer(television = television, onClose = onClose, content = {
         val inputMode = LocalInputModeManager.current
-        val windowFocused = LocalWindowInfo.current.isWindowFocused
-        LaunchedEffect(key1 = television, key2 = windowFocused, block = {
-            if (television && windowFocused) {
+        LaunchedEffect(key1 = television, block = {
+            if (television) {
                 inputMode.requestInputMode(InputMode.Keyboard)
                 withFrameNanos(onFrame = { })
                 proxyFocus.requestFocus()
             }
         })
         val closeNavigation = if (television) {
-            Modifier.focusRequester(closeFocus).tvDirections(down = { proxyFocus.requestFocus() })
+            Modifier.focusRequester(closeFocus).focusProperties(scope = { canFocus = true }).tvDirections(down = { proxyFocus.requestFocus() })
         } else {
             Modifier
         }
         val proxyNavigation = if (television) {
-            Modifier.focusRequester(proxyFocus).tvDirections(
+            Modifier.focusRequester(proxyFocus).focusProperties(scope = { canFocus = true }).tvDirections(
                 up = { closeFocus.requestFocus() },
                 down = { updateFocus.requestFocus() }
             )
@@ -201,7 +206,7 @@ private fun HomeSettingsDialog(onClose: () -> Unit, onProxy: () -> Unit, onUpdat
             Modifier
         }
         val updateNavigation = if (television) {
-            Modifier.focusRequester(updateFocus).tvDirections(up = { proxyFocus.requestFocus() })
+            Modifier.focusRequester(updateFocus).focusProperties(scope = { canFocus = true }).tvDirections(up = { proxyFocus.requestFocus() })
         } else {
             Modifier
         }
@@ -217,6 +222,17 @@ private fun HomeSettingsDialog(onClose: () -> Unit, onProxy: () -> Unit, onUpdat
                 SettingsEntry(icon = R.drawable.ic_update, title = stringResource(R.string.app_update_title), onClick = onUpdate, modifier = updateNavigation)
             }
         )
+    })
+}
+
+@Composable
+private fun SettingsMenuContainer(television: Boolean, onClose: () -> Unit, content: @Composable () -> Unit): Unit {
+    Box(modifier = if (television) Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)) else Modifier, contentAlignment = Alignment.Center, content = {
+        if (television) {
+            Box(modifier = Modifier.width(440.dp), content = { content() })
+        } else {
+            Dialog(onDismissRequest = onClose, content = content)
+        }
     })
 }
 

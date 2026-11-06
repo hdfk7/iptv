@@ -46,7 +46,7 @@ fun TvPlayerScreen(state: PlayerState, viewModel: PlayerViewModel, sourceViewMod
     val volumeUpFocus = remember(calculation = { FocusRequester() })
     val inputMode = LocalInputModeManager.current
     val hasChannels = state.channels.isNotEmpty()
-    LaunchedEffect(state.infoVisible, hasChannels, block = {
+    LaunchedEffect(state.infoVisible, hasChannels, dialogOpen, block = {
         if (dialogOpen) {
             return@LaunchedEffect
         }
@@ -56,6 +56,7 @@ fun TvPlayerScreen(state: PlayerState, viewModel: PlayerViewModel, sourceViewMod
         } else if (!hasChannels) {
             firstFocus.requestFocus()
         } else if (!initialChannelFocusPending) {
+            androidx.compose.runtime.withFrameNanos(onFrame = { _ -> })
             selectedRowFocus.restore?.invoke()
         }
     })

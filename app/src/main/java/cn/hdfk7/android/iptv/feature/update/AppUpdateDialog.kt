@@ -1,195 +1,243 @@
 package cn.hdfk7.android.iptv.feature.update
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import android.content.Intent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import cn.hdfk7.android.iptv.BuildConfig
-import cn.hdfk7.android.iptv.R
-import cn.hdfk7.android.iptv.core.data.network.PlaylistDownloader
-import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
-import cn.hdfk7.android.iptv.core.ui.theme.Accent
-import cn.hdfk7.android.iptv.core.ui.theme.DialogSurface
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import cn.hdfk7.android.iptv.BuildConfig
+import cn.hdfk7.android.iptv.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
-import java.io.File
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
+import java.io.File
+import java.io.IOException
 
 class AppUpdateFileProvider : FileProvider()
 
 internal data class AppRelease(val versionCode: Int, val versionName: String, val downloadUrl: String)
 
-private fun readAppRelease(address: String): AppRelease {
-    val manifestUrl = address.toHttpUrl()
-    require(manifestUrl.isHttps)
-    val manifest = JSONObject(PlaylistDownloader().download(manifestUrl.toString()))
-    val versionCode = manifest.get("versionCode") as? Int ?: error("Expected an integer versionCode")
-    val versionName = manifest.getString("versionName")
-    val downloadUrl = requireNotNull(manifestUrl.resolve(manifest.getString("apkUrl")))
-    require(versionCode > 0 && versionName.isNotBlank() && downloadUrl.isHttps && downloadUrl != manifestUrl)
-    return AppRelease(versionCode, versionName, downloadUrl.toString())
+private suspend fun readAppRelease(address: String): AppRelease {
+    val body = withTimeout(timeMillis = 20_000L, block = { downloadUpdateManifest(address) })
+    try {
+        val manifestUrl = address.toHttpUrl()
+        require(manifestUrl.isHttps)
+        val manifest = JSONObject(body)
+        val versionCode = manifest.get("versionCode") as? Int ?: error("Expected an integer versionCode")
+        val versionName = manifest.getString("versionName")
+        val downloadUrl = requireNotNull(manifestUrl.resolve(manifest.getString("apkUrl")))
+        require(versionCode > 0 && versionName.isNotBlank() && downloadUrl.isHttps && downloadUrl != manifestUrl)
+        return AppRelease(versionCode, versionName, downloadUrl.toString())
+    } catch (_: Exception) {
+        throw AppUpdateDownloadException(R.string.app_update_manifest_invalid)
+    }
 }
 
-private fun openInstaller(context: Context, apk: File) {
+@Suppress("DEPRECATION")
+private fun installerIntent(context: Context, apk: File): Intent {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", apk)
-    val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+    return Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(uri, "application/vnd.android.package-archive")
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    context.startActivity(intent)
+        .putExtra(Intent.EXTRA_RETURN_RESULT, true)
+        .also(block = { intent -> intent.clipData = ClipData.newRawUri("APK", uri) })
+}
+
+@Suppress("DEPRECATION")
+private fun installedVersion(context: Context): Long {
+    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        info.longVersionCode
+    } else {
+        info.versionCode.toLong()
+    }
 }
 
 @Composable
-fun AppUpdateDialog(onClose: () -> Unit) {
+fun AppUpdateDialog(onClose: () -> Unit): Unit {
     val context = LocalContext.current
     val address = BuildConfig.APP_UPDATE_MANIFEST_URL
-    val closeFocus = remember(calculation = { FocusRequester() })
-    var result by remember(calculation = { mutableStateOf<Result<AppRelease>?>(null) })
     val scope = rememberCoroutineScope()
+    var checkAttempt by remember(calculation = { mutableIntStateOf(0) })
+    var result by remember(calculation = { mutableStateOf<Result<AppRelease>?>(null) })
     var downloading by remember(calculation = { mutableStateOf(false) })
     val downloadProgress = remember(calculation = { MutableStateFlow<AppDownloadProgress?>(null) })
+    val validation = remember(calculation = { MutableStateFlow(false) })
     val progress by downloadProgress.collectAsState()
+    val validating by validation.collectAsState()
     var downloadedApk by remember(calculation = { mutableStateOf<File?>(null) })
     var actionMessage by remember(calculation = { mutableStateOf<Int?>(null) })
-    val install: (File) -> Unit = { apk ->
-        actionMessage = try {
-            openInstaller(context, apk)
-            R.string.app_update_install_ready
-        } catch (_: RuntimeException) {
-            R.string.app_update_install_failed
-        }
-    }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult(), onResult = {
-        val apk = downloadedApk
-        if (apk != null && context.packageManager.canRequestPackageInstalls()) {
-            install(apk)
-        } else {
-            actionMessage = R.string.app_update_allow_install
+    var recovery by remember(calculation = { mutableStateOf(UpdateAction.Download) })
+    var needsPermission by remember(calculation = { mutableStateOf(false) })
+    var installing by remember(calculation = { mutableStateOf(false) })
+    val latest = result?.getOrNull()
+    val update = latest?.takeIf(predicate = { release -> release.versionCode > BuildConfig.VERSION_CODE })
+    val installer = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult(), onResult = { outcome ->
+        installing = false
+        val expectedVersion = update?.versionCode
+        actionMessage = when {
+            expectedVersion != null && installedVersion(context) >= expectedVersion -> R.string.app_update_install_complete
+            outcome.resultCode == Activity.RESULT_OK -> R.string.app_update_install_unconfirmed
+            outcome.resultCode == Activity.RESULT_CANCELED -> R.string.app_update_install_cancelled
+            else -> installationFailureMessage(outcome.data?.getIntExtra("android.intent.extra.INSTALL_RESULT", 0) ?: 0)
         }
     })
-    val requestInstall: (File) -> Unit = { apk ->
-        if (context.packageManager.canRequestPackageInstalls()) {
-            install(apk)
-        } else {
-            actionMessage = R.string.app_update_allow_install
-            try {
-                permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()))
-            } catch (_: RuntimeException) {
-                actionMessage = R.string.app_update_install_failed
+    val install: (File) -> Unit = { apk ->
+        when {
+            !apk.isFile || apk.length() == 0L -> {
+                downloadedApk = null
+                recovery = UpdateAction.Download
+                actionMessage = R.string.app_update_file_missing
+            }
+            !context.packageManager.canRequestPackageInstalls() -> {
+                needsPermission = true
+                actionMessage = R.string.app_update_allow_install
+            }
+            else -> {
+                needsPermission = false
+                try {
+                    installing = true
+                    installer.launch(installerIntent(context, apk))
+                    actionMessage = R.string.app_update_install_ready
+                } catch (_: ActivityNotFoundException) {
+                    installing = false
+                    actionMessage = R.string.app_update_installer_missing
+                } catch (_: SecurityException) {
+                    installing = false
+                    actionMessage = R.string.app_update_install_access_denied
+                } catch (_: RuntimeException) {
+                    installing = false
+                    actionMessage = R.string.app_update_install_failed
+                }
             }
         }
     }
-    LaunchedEffect(key1 = address, block = {
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult(), onResult = { _ ->
+        needsPermission = !context.packageManager.canRequestPackageInstalls()
+        actionMessage = if (needsPermission) R.string.app_update_permission_not_granted else R.string.app_update_permission_granted
+    })
+    val authorize: () -> Unit = {
+        if (context.packageManager.canRequestPackageInstalls()) {
+            needsPermission = false
+            actionMessage = R.string.app_update_permission_granted
+        } else {
+            try {
+                permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()))
+            } catch (_: RuntimeException) {
+                actionMessage = R.string.app_update_permission_settings_unavailable
+            }
+        }
+    }
+    LaunchedEffect(key1 = address, key2 = checkAttempt, block = {
+        result = null
+        actionMessage = null
         if (address.isNotBlank()) {
-            result = withContext(context = Dispatchers.IO, block = { runCatching { readAppRelease(address) } })
+            result = withContext(context = Dispatchers.IO, block = {
+                try {
+                    Result.success(readAppRelease(address))
+                } catch (_: TimeoutCancellationException) {
+                    Result.failure(AppUpdateDownloadException(R.string.app_update_check_timeout))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    Result.failure(failure)
+                }
+            })
         }
     })
-    val latest = result?.getOrNull()
-    val update = latest?.takeIf(predicate = { release -> release.versionCode > BuildConfig.VERSION_CODE })
+    val startDownload: () -> Unit = {
+        if (update != null) {
+            downloadedApk = null
+            downloading = true
+            actionMessage = null
+            downloadProgress.value = null
+            validation.value = false
+            scope.launch(block = {
+                try {
+                    downloadedApk = downloadApk(context.applicationContext, update,
+                        onProgress = { status -> downloadProgress.value = status },
+                        onVerifying = { validation.value = true })
+                    needsPermission = !context.packageManager.canRequestPackageInstalls()
+                    actionMessage = if (needsPermission) R.string.app_update_allow_install else R.string.app_update_download_ready
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: AppUpdateDownloadException) {
+                    actionMessage = failure.messageRes
+                    recovery = updateRecovery(failure.messageRes)
+                } catch (_: IOException) {
+                    actionMessage = R.string.app_update_download_failed
+                    recovery = UpdateAction.Download
+                } catch (_: Exception) {
+                    actionMessage = R.string.app_update_download_unexpected
+                    recovery = UpdateAction.Download
+                } finally {
+                    downloading = false
+                    validation.value = false
+                }
+            })
+        }
+    }
+    val primaryAction = when {
+        installing || downloading || address.isBlank() || result == null -> null
+        downloadedApk != null && needsPermission -> UpdateAction.Authorize
+        downloadedApk != null -> UpdateAction.Install
+        latest == null || update == null -> UpdateAction.Check
+        actionMessage != null -> recovery
+        else -> UpdateAction.Download
+    }
+    val primaryLabel = when (primaryAction) {
+        UpdateAction.Check -> R.string.app_update_retry_check
+        UpdateAction.Authorize -> R.string.app_update_authorize_install
+        UpdateAction.Install -> R.string.app_update_install
+        UpdateAction.Download -> if (actionMessage == null) R.string.app_update_confirm_download else R.string.app_update_retry_download
+        null -> null
+    }
     val current = progress
     val fraction = current?.fraction
     val message = when {
+        validating -> stringResource(R.string.app_update_verifying)
         downloading && current != null && fraction != null -> stringResource(R.string.app_update_progress, Formatter.formatFileSize(context, current.downloaded), Formatter.formatFileSize(context, current.total), (fraction * 100).toInt())
         downloading && current != null -> stringResource(R.string.app_update_progress_size, Formatter.formatFileSize(context, current.downloaded))
         downloading -> stringResource(R.string.app_update_downloading)
         actionMessage != null -> stringResource(checkNotNull(actionMessage))
         address.isBlank() -> stringResource(R.string.app_update_unconfigured)
         result == null -> stringResource(R.string.app_update_checking)
-        latest == null -> stringResource(R.string.app_update_failed)
+        latest == null -> stringResource((result?.exceptionOrNull() as? AppUpdateDownloadException)?.messageRes ?: R.string.app_update_failed)
         update == null -> stringResource(R.string.app_update_current, BuildConfig.VERSION_NAME)
         else -> stringResource(R.string.app_update_available, update.versionName)
     }
-    Dialog(onDismissRequest = onClose, content = {
-        Column(
-            modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth()
-                .background(DialogSurface, RoundedCornerShape(22.dp)).padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            content = {
-                Text(text = stringResource(R.string.app_update_title), color = Color.White, fontSize = 22.sp)
-                Text(text = message, color = Accent, fontSize = 15.sp)
-                if (downloading) {
-                    if (fraction == null) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    } else {
-                        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
-                    TvIconButton(
-                        icon = R.drawable.ic_close,
-                        description = stringResource(R.string.app_update_close),
-                        onClick = onClose,
-                        modifier = Modifier.focusRequester(closeFocus)
-                    )
-                    if (update != null && !downloading) {
-                        TvIconButton(
-                            icon = if (downloadedApk == null) R.drawable.ic_update else R.drawable.ic_check,
-                            description = stringResource(if (downloadedApk == null) R.string.app_update_confirm_download else R.string.app_update_install),
-                            onClick = {
-                                val apk = downloadedApk
-                                if (apk != null) {
-                                    requestInstall(apk)
-                                } else {
-                                    downloading = true
-                                    actionMessage = null
-                                    downloadProgress.value = null
-                                    scope.launch(block = {
-                                        try {
-                                            val file = downloadApk(context.applicationContext, update, onProgress = { status ->
-                                                downloadProgress.value = status
-                                            })
-                                            downloadedApk = file
-                                            requestInstall(file)
-                                        } catch (cancelled: CancellationException) {
-                                            throw cancelled
-                                        } catch (failure: AppUpdateDownloadException) {
-                                            actionMessage = failure.messageRes
-                                        } catch (_: Exception) {
-                                            actionMessage = R.string.app_update_download_failed
-                                        } finally {
-                                            downloading = false
-                                        }
-                                    })
-                                }
-                            }
-                        )
-                    }
-                })
-                LaunchedEffect(key1 = downloading, block = { closeFocus.requestFocus() })
+    AppUpdateContent(
+        message = message,
+        downloading = downloading,
+        validating = validating,
+        fraction = fraction,
+        primaryLabel = primaryLabel,
+        canRedownload = downloadedApk != null && !installing,
+        onPrimary = {
+            when (primaryAction) {
+                UpdateAction.Check -> { checkAttempt += 1 }
+                UpdateAction.Download -> { startDownload() }
+                UpdateAction.Authorize -> { authorize() }
+                UpdateAction.Install -> { downloadedApk?.let(block = install) }
+                null -> Unit
             }
-        )
-    })
+        },
+        onRedownload = startDownload,
+        onClose = onClose
+    )
 }
