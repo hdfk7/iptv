@@ -44,10 +44,8 @@
     <string name="live_label">直播</string>
     <string name="line_detail">线路 %1$d / %2$d</string>
     <string name="source_aggregate">自动汇总各源收藏</string>
-    <string name="no_source">选择直播源</string>
     <string name="channel_number">%1$03d</string>
     <string name="fullscreen">全屏</string>
-    <string name="exit_fullscreen">退出全屏</string>
     <string name="proxy_title">HTTP 代理</string>
     <string name="proxy_on">已开启</string>
     <string name="proxy_off">已关闭</string>
@@ -58,4 +56,6 @@
     <string name="proxy_save">保存</string>
     <string name="proxy_cancel">取消</string>
     <string name="proxy_invalid">请检查 IP、端口（1–65535）及认证信息</string>
+    <string name="exit_fullscreen">退出全屏</string>
+    <string name="channel_count">节目 · %1$d</string>
 </resources>

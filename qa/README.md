@@ -21,3 +21,12 @@ python qa/build_gallery.py
 不能把模拟器验证等同于小米实体电视测试；强制执行日更任务不代表已经等待真实 24 小时。图册会列明这些边界。
 
 1.2.0 首页收藏、代理、源管理、播放按钮改为图标，无障碍说明保留在 content-desc。旧测试脚本中依赖这些按钮 text 的步骤需要改为 content-desc；worker_cases 仅适用历史版本，当前不再创建周期任务。U01–U03 为新版实际截图。代理 JVM 测试覆盖地址校验、HTTP 407 认证及关闭直连，模拟器完整代理播放和 HTTPS CONNECT 尚未完成实测。
+
+交互回归（当前图标界面）：
+
+```powershell
+python qa/interaction_audit.py focus
+python qa/interaction_audit.py flows
+```
+
+需要 Android 14 TV 模拟器 emulator-5580 和 fixture_server.py。保留已有数据并新增 Audit 200 / Audit Main 测试源；不会清除或恢复应用数据。focus 阶段检查冷启动、切源、200节目长列表、第40项往返及全屏返回；flows 阶段检查全屏默认控件、暂停、方向切台、收藏、空收藏退出、设置取消、错误重试及后台暂停恢复。

@@ -12,7 +12,6 @@ import cn.hdfk7.android.iptv.core.model.PlaylistSnapshot
 import cn.hdfk7.android.iptv.core.model.PlaylistSource
 import cn.hdfk7.android.iptv.core.model.RefreshResult
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow

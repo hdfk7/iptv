@@ -1,7 +1,9 @@
 package cn.hdfk7.android.iptv.app
 
 import android.app.Application
-import androidx.work.WorkManager
+import android.app.job.JobScheduler
+import android.os.Build
+import android.util.Log
 import cn.hdfk7.android.iptv.core.data.local.ProxySettingsStore
 import cn.hdfk7.android.iptv.core.data.network.PlaylistDownloader
 import cn.hdfk7.android.iptv.core.data.repository.PlaylistRepository
@@ -12,7 +14,16 @@ class IptvApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Upgrade cleanup only; no new background refresh is scheduled.
-        WorkManager.getInstance(this).cancelUniqueWork("daily-playlist")
+        // Old versions scheduled background refresh; this app no longer schedules any jobs.
+        try {
+            val scheduler = getSystemService(JobScheduler::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                scheduler.cancelInAllNamespaces()
+            } else {
+                scheduler.cancelAll()
+            }
+        } catch (exception: RuntimeException) {
+            Log.w("IptvApplication", "Unable to cancel legacy background jobs", exception)
+        }
     }
 }

@@ -8,10 +8,13 @@
         android:theme="@style/Theme.Iptv" android:icon="@drawable/tv_icon" android:banner="@drawable/tv_banner"
         android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules"
         android:usesCleartextTraffic="true" android:supportsRtl="true">
-        <activity android:name=".app.MainActivity" android:exported="true" android:screenOrientation="landscape">
+        <activity android:name=".app.MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

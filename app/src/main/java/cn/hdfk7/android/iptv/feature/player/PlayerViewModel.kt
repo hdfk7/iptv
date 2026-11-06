@@ -34,7 +34,8 @@ import kotlinx.coroutines.launch
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = (application as IptvApplication).playlistRepository
+    private val app = application as IptvApplication
+    private val repository = app.playlistRepository
     private val audio = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val mutableState = MutableStateFlow(PlayerState(fixedVolume = audio.isVolumeFixed))
     val state = mutableState.asStateFlow()
@@ -60,6 +61,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val favoriteRemoved = catalog.library.activeSourceId == SourceLibrary.FAVORITES_ID && activeChannel != null && catalog.channels.none(predicate = { channel -> channel.id == activeChannel?.id })
                 if (switched || favoriteRemoved) {
                     clearSelection()
+                    if (catalog.channels.isEmpty() && state.value.fullscreen) {
+                        exitFullscreen()
+                    }
                 }
                 val playing = activeChannel
                 val current = catalog.channels.firstOrNull(predicate = { channel -> channel.id == playing?.id })
@@ -112,6 +116,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun refreshManually() {
+        if (refreshJob?.isActive == true) {
+            return
+        }
         state.value.channels.firstOrNull()?.let { channel -> select(channel = channel) }
         refresh()
     }
@@ -121,15 +128,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         mutableState.value = state.value.copy(fullscreen = true)
-        wantsPlayback = true
-        if (state.value.playback == PlaybackStatus.ERROR) {
-            retry()
-        } else if (player?.currentMediaItem == null) {
-            playLine()
-        } else {
-            player?.playWhenReady = true
-        }
-        showInformation()
+        setPlayback(true)
     }
 
     fun exitFullscreen() {
@@ -193,7 +192,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (player != null) {
             return
         }
-        val settings = (getApplication<Application>() as IptvApplication).proxySettings.current
+        val settings = app.proxySettings.current
         val client = ProxyHttpClient.create(settings, BuildConfig.STREAM_CONNECT_TIMEOUT_MS, BuildConfig.STREAM_READ_TIMEOUT_MS)
         httpClient = client
         val http = OkHttpDataSource.Factory(client)
@@ -284,24 +283,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun togglePlayback() {
-        showInformation()
-        if (activeChannel == null) {
-            val first = state.value.channels.firstOrNull() ?: return
-            select(channel = first)
-            return
-        }
-        if (state.value.playback == PlaybackStatus.ERROR) {
-            retry()
+        if (activeChannel == null || state.value.playback == PlaybackStatus.ERROR) {
+            setPlayback(true)
             return
         }
         val current = player ?: return
-        if (current.currentMediaItem == null) {
-            wantsPlayback = true
-            playLine()
-            return
-        }
-        wantsPlayback = !current.playWhenReady
-        current.playWhenReady = wantsPlayback
+        setPlayback(current.currentMediaItem == null || !current.playWhenReady)
     }
 
     fun setPlayback(playing: Boolean) {

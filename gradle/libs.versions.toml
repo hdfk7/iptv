@@ -4,7 +4,6 @@ kotlin = "2.4.21"
 compose = "2026.09.00"
 lifecycle = "2.11.0"
 media = "1.11.1"
-work = "2.11.1"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose" }
@@ -17,7 +16,6 @@ media-player = { module = "androidx.media3:media3-exoplayer", version.ref = "med
 media-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media" }
 media-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media" }
 media-ui = { module = "androidx.media3:media3-ui", version.ref = "media" }
-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 junit = { module = "org.junit.jupiter:junit-jupiter", version = "5.11.4" }
 junit-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.11.4" }
 

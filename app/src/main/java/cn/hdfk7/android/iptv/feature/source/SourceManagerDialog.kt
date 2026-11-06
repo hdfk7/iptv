@@ -1,6 +1,8 @@
 package cn.hdfk7.android.iptv.feature.source
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +13,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -26,13 +30,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cn.hdfk7.android.iptv.core.ui.theme.*
 import cn.hdfk7.android.iptv.R
-import cn.hdfk7.android.iptv.core.model.PlaylistSource
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
-import cn.hdfk7.android.iptv.core.ui.theme.Accent
-import cn.hdfk7.android.iptv.core.ui.theme.Gold
-import cn.hdfk7.android.iptv.core.ui.theme.Muted
 
 @Composable
 fun SourceManagerDialog(viewModel: SourceManagerViewModel) {
@@ -41,7 +42,7 @@ fun SourceManagerDialog(viewModel: SourceManagerViewModel) {
     Box(content = {
         if (state.open) {
             Dialog(onDismissRequest = viewModel::back, properties = DialogProperties(usePlatformDefaultWidth = false), content = {
-                Column(modifier = Modifier.width(710.dp).heightIn(max = 460.dp).background(Color(0xFF111D2E), RoundedCornerShape(22.dp)).border(1.dp, Color(0xFF34465D), RoundedCornerShape(22.dp)).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = {
+                Column(modifier = Modifier.width(710.dp).heightIn(max = 460.dp).background(DialogSurface, RoundedCornerShape(22.dp)).border(1.dp, Border, RoundedCornerShape(22.dp)).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = {
                     when {
                         state.draft != null -> {
                             SourceEditor(state = state, viewModel = viewModel)
@@ -61,8 +62,9 @@ fun SourceManagerDialog(viewModel: SourceManagerViewModel) {
 
 @Composable
 private fun SourceList(state: SourceManagerState, library: SourceLibrary, viewModel: SourceManagerViewModel) {
+    val inputMode = LocalInputModeManager.current
     val initialFocus = remember(calculation = { FocusRequester() })
-    LaunchedEffect(key1 = Unit, block = { initialFocus.requestFocus() })
+    LaunchedEffect(key1 = Unit, block = { inputMode.requestInputMode(InputMode.Keyboard); initialFocus.requestFocus() })
     Column(modifier = Modifier.height(408.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = {
         DialogHeader(title = stringResource(R.string.library_title), onClose = viewModel::back)
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), content = {
@@ -82,7 +84,7 @@ private fun SourceList(state: SourceManagerState, library: SourceLibrary, viewMo
 
 @Composable
 private fun SourceCard(name: String, detail: String, active: Boolean, icon: Int, busy: Boolean, onActivate: () -> Unit, modifier: Modifier = Modifier, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null) {
-    Row(modifier = Modifier.fillMaxWidth().background(if (active) Color(0xFF193633) else Color(0xFF17243A), RoundedCornerShape(14.dp)).border(1.dp, if (active) Accent.copy(alpha = 0.4f) else Color(0xFF26364C), RoundedCornerShape(14.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = {
+    Row(modifier = Modifier.fillMaxWidth().background(if (active) SelectedPanel else PanelAlt, RoundedCornerShape(14.dp)).border(1.dp, if (active) Accent.copy(alpha = 0.4f) else Border, RoundedCornerShape(14.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = {
         Icon(painter = painterResource(icon), contentDescription = null, tint = if (icon == R.drawable.ic_star) Gold else Accent, modifier = Modifier.size(24.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp), content = {
             Text(text = name, fontWeight = FontWeight.SemiBold, color = Color.White, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -90,10 +92,10 @@ private fun SourceCard(name: String, detail: String, active: Boolean, icon: Int,
         })
         TvIconButton(description = stringResource(if (active) R.string.source_current else R.string.source_use), icon = if (active) R.drawable.ic_check else R.drawable.ic_play, onClick = onActivate, selected = active, enabled = !busy, modifier = modifier)
         if (onEdit != null) {
-            TvIconButton(icon = R.drawable.ic_edit, description = stringResource(R.string.source_edit), onClick = onEdit)
+            TvIconButton(icon = R.drawable.ic_edit, description = stringResource(R.string.source_edit), onClick = onEdit, enabled = !busy)
         }
         if (onDelete != null) {
-            TvIconButton(icon = R.drawable.ic_delete, description = stringResource(R.string.source_delete), onClick = onDelete)
+            TvIconButton(icon = R.drawable.ic_delete, description = stringResource(R.string.source_delete), onClick = onDelete, enabled = !busy)
         }
         if (onEdit == null && onDelete == null) {
             Spacer(modifier = Modifier.width(98.dp))
@@ -103,10 +105,11 @@ private fun SourceCard(name: String, detail: String, active: Boolean, icon: Int,
 
 @Composable
 private fun SourceEditor(state: SourceManagerState, viewModel: SourceManagerViewModel) {
+    val inputMode = LocalInputModeManager.current
     val draft = state.draft ?: return
     val nameFocus = remember(calculation = { FocusRequester() })
-    LaunchedEffect(key1 = draft.id, block = { nameFocus.requestFocus() })
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp), content = {
+    LaunchedEffect(key1 = draft.id, block = { inputMode.requestInputMode(InputMode.Keyboard); nameFocus.requestFocus() })
+    Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp), content = {
         DialogHeader(title = stringResource(if (draft.id == null) R.string.source_add else R.string.source_edit), onClose = viewModel::back)
         OutlinedTextField(value = draft.name, onValueChange = viewModel::editName, label = { Text(text = stringResource(R.string.source_name)) }, singleLine = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth().focusRequester(nameFocus))
         OutlinedTextField(value = draft.address, onValueChange = viewModel::editAddress, label = { Text(text = stringResource(R.string.source_address)) }, minLines = 2, maxLines = 2, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), enabled = !state.busy, modifier = Modifier.fillMaxWidth())
@@ -120,9 +123,10 @@ private fun SourceEditor(state: SourceManagerState, viewModel: SourceManagerView
 
 @Composable
 private fun SourceDelete(state: SourceManagerState, viewModel: SourceManagerViewModel) {
+    val inputMode = LocalInputModeManager.current
     val source = state.deleting ?: return
     val cancelFocus = remember(calculation = { FocusRequester() })
-    LaunchedEffect(key1 = source.id, block = { cancelFocus.requestFocus() })
+    LaunchedEffect(key1 = source.id, block = { inputMode.requestInputMode(InputMode.Keyboard); cancelFocus.requestFocus() })
     Column(verticalArrangement = Arrangement.spacedBy(20.dp), content = {
         DialogHeader(title = stringResource(R.string.source_delete_title, source.name), onClose = viewModel::back)
         SourceError(error = state.error)

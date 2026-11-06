@@ -1,6 +1,11 @@
 package cn.hdfk7.android.iptv.app
 
 import android.annotation.SuppressLint
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -23,11 +28,24 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val television = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+        if (television) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
         val insets = WindowCompat.getInsetsController(window, window.decorView)
-        insets.hide(WindowInsetsCompat.Type.systemBars())
         insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         setContent(content = {
-            IptvTheme(content = { PlayerScreen(viewModel = viewModel, sourceViewModel = sourceViewModel) })
+            val state by viewModel.state.collectAsStateWithLifecycle()
+            LaunchedEffect(key1 = state.fullscreen, block = {
+                if (television || state.fullscreen) {
+                    insets.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    insets.show(WindowInsetsCompat.Type.systemBars())
+                }
+            })
+            IptvTheme(content = {
+                PlayerScreen(viewModel = viewModel, sourceViewModel = sourceViewModel, television = television)
+            })
         })
     }
 

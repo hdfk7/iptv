@@ -5,10 +5,22 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val Accent = Color(0xFF7CE3CD)
-val Muted = Color(0xFF8998B0)
-val Panel = Color(0xFF111C2D)
-val Gold = Color(0xFFFFD58A)
+val Accent = Color(0xFFF3F6FA)
+val Muted = Color(0xFFA5AEBC)
+val Panel = Color(0xFF1D222A)
+val ButtonPanel = Color(0xFF29313D)
+val PanelAlt = Color(0xFF262D37)
+val DialogSurface = Color(0xFF202630)
+val SelectedPanel = Color(0xFF303D4F)
+val Border = Color(0xFF3B4553)
+val Divider = Color(0xFF536071)
+val FocusFill = Color(0xFFF3F6FA)
+val FocusInk = Color(0xFF18202B)
+val BackdropTop = Color(0xFF242B35)
+val BackdropMiddle = Color(0xFF171C25)
+val BackdropBottom = Color(0xFF10141B)
+val Gold = Color(0xFFE5BF7B)
+val Error = Color(0xFFFFA49B)
 
 @Composable
 fun IptvTheme(content: @Composable () -> Unit) {
@@ -16,11 +28,14 @@ fun IptvTheme(content: @Composable () -> Unit) {
         colorScheme = darkColorScheme(
             primary = Accent,
             secondary = Gold,
-            background = Color(0xFF080F1C),
+            background = BackdropBottom,
             surface = Panel,
-            surfaceVariant = Color(0xFF1C2A40),
-            onPrimary = Color(0xFF0A2923),
-            outline = Color(0xFF2A3A50)
+            surfaceVariant = PanelAlt,
+            onPrimary = FocusInk,
+            onSurface = Accent,
+            onSurfaceVariant = Muted,
+            error = Error,
+            outline = Border
         ),
         content = content
     )
