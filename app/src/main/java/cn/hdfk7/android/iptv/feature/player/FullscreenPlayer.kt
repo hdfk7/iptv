@@ -60,7 +60,7 @@ internal fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel, to
     } else {
         Modifier
     }
-    Box(
+    BoxWithConstraints(
         modifier = Modifier.fillMaxSize().then(revealOnTouch).onPreviewKeyEvent(onPreviewKeyEvent = { event ->
             val key = event.nativeKeyEvent
             val informationKey = key.keyCode == KeyEvent.KEYCODE_INFO || key.keyCode == KeyEvent.KEYCODE_MENU
@@ -89,9 +89,16 @@ internal fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel, to
         content = {
             PlaybackSurface(state = state, modifier = Modifier.fillMaxSize())
             if (state.infoVisible) {
+                val landscapePhone = touchControls && maxWidth > maxHeight && maxWidth >= 580.dp
+                val programInfo: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(3.dp), content = {
+                        Text(text = state.selectedName.orEmpty(), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = if (landscapePhone) 18.sp else if (touchControls) 21.sp else 23.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(text = state.selectedSourceName.orEmpty(), color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    })
+                }
                 val controlsPanel = if (touchControls) {
                     Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.displayCutout)
-                        .widthIn(max = 520.dp).fillMaxWidth().padding(12.dp)
+                        .widthIn(max = if (landscapePhone) 720.dp else 520.dp).fillMaxWidth().padding(12.dp)
                         .background(DialogSurface.copy(alpha = 0.96f), RoundedCornerShape(20.dp)).padding(12.dp)
                 } else {
                     Modifier.align(Alignment.BottomStart).padding(start = 28.dp, end = 28.dp, bottom = 20.dp)
@@ -102,21 +109,27 @@ internal fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel, to
                     modifier = controlsPanel,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     content = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = {
-                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), content = {
-                                Text(text = state.selectedName.orEmpty(), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = if (touchControls) 21.sp else 23.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(text = state.selectedSourceName.orEmpty(), color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (!landscapePhone) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = {
+                                programInfo(Modifier.weight(1f))
+                                if (touchControls && state.line > 0) {
+                                    StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine)
+                                    retryLineButton()
+                                }
                             })
-                            if (touchControls && state.line > 0) {
-                                StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine)
-                                retryLineButton()
-                            }
-                        })
+                        }
                         Row(modifier = if (touchControls) Modifier.fillMaxWidth() else Modifier, horizontalArrangement = Arrangement.spacedBy(if (touchControls) 6.dp else 8.dp), verticalAlignment = Alignment.CenterVertically, content = {
+                            if (landscapePhone) {
+                                programInfo(Modifier.weight(1f).padding(end = 8.dp))
+                            }
                             TvIconButton(icon = R.drawable.ic_previous, description = stringResource(R.string.previous), onClick = { viewModel.changeChannel(-1) })
                             TvIconButton(icon = if (state.playback == PlaybackStatus.PLAYING) R.drawable.ic_pause else R.drawable.ic_play, description = stringResource(if (state.playback == PlaybackStatus.PLAYING) R.string.pause else R.string.play), onClick = viewModel::togglePlayback, modifier = Modifier.focusRequester(controlFocus))
                             TvIconButton(icon = R.drawable.ic_next, description = stringResource(R.string.next), onClick = { viewModel.changeChannel(1) })
-                            if (touchControls) {
+                            if (landscapePhone && state.line > 0) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine)
+                                retryLineButton()
+                            } else if (touchControls && !landscapePhone) {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
                             TvIconButton(icon = if (state.selectedId in state.favoriteIds) R.drawable.ic_star_filled else R.drawable.ic_star, description = stringResource(if (state.selectedId in state.favoriteIds) R.string.favorite_remove else R.string.favorite_add), onClick = viewModel::toggleCurrentFavorite, tint = if (state.selectedId in state.favoriteIds) Gold else Color.White)
