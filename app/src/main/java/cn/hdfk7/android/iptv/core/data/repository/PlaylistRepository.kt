@@ -82,6 +82,10 @@ class PlaylistRepository(
         mutate(transform = { current -> LibraryRules.delete(current, id) })
     }
 
+    suspend fun restoreDefaults() {
+        mutate(transform = { current -> LibraryRules.restoreDefaults(current) })
+    }
+
     suspend fun toggleFavorite(channel: Channel) {
         mutate(transform = { current -> LibraryRules.toggleFavorite(current, channel) })
     }
@@ -191,7 +195,7 @@ class PlaylistRepository(
         }
         try {
             val stored = libraryStore.read()
-            val saved = LibraryRules.shortenDefaultNames(stored ?: LibraryRules.defaults())
+            val saved = LibraryRules.appendNewDefaults(LibraryRules.shortenDefaultNames(stored ?: LibraryRules.defaults()))
             library = saved.copy(activeSourceId = saved.sources.firstOrNull()?.id ?: SourceLibrary.FAVORITES_ID)
             if (stored == null || library != stored) {
                 libraryStore.write(library)

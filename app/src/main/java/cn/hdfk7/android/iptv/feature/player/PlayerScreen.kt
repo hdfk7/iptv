@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,8 +20,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -30,6 +36,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.app.IptvApplication
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
+import cn.hdfk7.android.iptv.core.ui.components.LocalTvActionFocused
+import cn.hdfk7.android.iptv.core.ui.components.TvAction
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 import cn.hdfk7.android.iptv.core.ui.theme.*
 import cn.hdfk7.android.iptv.feature.proxy.ProxySettingsDialog
@@ -44,7 +52,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
     var settingsPage by remember(calculation = { mutableStateOf<SettingsPage?>(null) })
     val app = LocalContext.current.applicationContext as IptvApplication
     val firstFocus = remember(calculation = { FocusRequester() })
-    val selectedRowFocus = remember(calculation = { ChannelListFocus() })
+    val selectedRowFocus = remember(key1 = viewModel, calculation = { ChannelListFocus(viewModel.channelFocusMemory) })
     var initialChannelFocusPending by remember(calculation = { mutableStateOf(true) })
     val videoFocus = remember(calculation = { FocusRequester() })
     var returningFromFullscreen by remember(calculation = { mutableStateOf(false) })
@@ -96,6 +104,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                             onSelect = viewModel::select,
                             modifier = modifier,
                             compact = !television,
+                            television = television,
                             requestInitialFocus = television && initialChannelFocusPending && !sourceUi.open && settingsPage == null,
                             onInitialFocus = { initialChannelFocusPending = false },
                             selectedRowFocus = selectedRowFocus,
@@ -115,11 +124,12 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                             narrowTv = narrowTv
                         )
                     }
+                    val pageInsets = if (television) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
                     Column(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = if (television && !narrowTv) 26.dp else 12.dp, vertical = if (television && !narrowTv) 20.dp else 8.dp),
+                        modifier = Modifier.fillMaxSize().then(pageInsets).padding(horizontal = if (television && !narrowTv) 26.dp else 12.dp, vertical = if (television && !narrowTv) 20.dp else 8.dp),
                         verticalArrangement = Arrangement.spacedBy(if (television && !narrowTv) 16.dp else 8.dp),
                         content = {
-                            HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onSettings = { settingsPage = SettingsPage.Menu }, onRefresh = viewModel::refreshManually, compact = !television || narrowTv)
+                            HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onSettings = { settingsPage = SettingsPage.Menu }, onRefresh = viewModel::refreshManually, compact = !television || narrowTv, selectedRowFocus = selectedRowFocus)
                             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                             if (stacked) {
                                 playback(Modifier.fillMaxWidth())
@@ -157,19 +167,36 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
 }
 
 @Composable
-private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onSettings: () -> Unit, onRefresh: () -> Unit, compact: Boolean) {
+private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onSettings: () -> Unit, onRefresh: () -> Unit, compact: Boolean, selectedRowFocus: ChannelListFocus) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
     val source = state.sources.firstOrNull(predicate = { entry -> entry.id == state.activeSourceId })
-    Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp), content = {
-        TvIconButton(icon = R.drawable.ic_source, description = stringResource(if (favorites) R.string.favorites else R.string.library_title), onClick = sourceViewModel::open, modifier = Modifier.focusRequester(focusRequester))
-        val sourceTitle = if (compact && favorites) stringResource(R.string.favorites) else source?.name
-        if (sourceTitle != null && (compact || !favorites)) {
-            Text(text = sourceTitle, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (compact) Modifier.weight(1f) else Modifier.widthIn(max = 230.dp))
-        }
-        TvIconButton(description = stringResource(R.string.favorites_count, state.favoriteCount), icon = if (favorites) R.drawable.ic_star_filled else R.drawable.ic_star, selected = favorites, onClick = sourceViewModel::showFavorites)
-        if (!compact || sourceTitle == null) {
-            Spacer(modifier = Modifier.weight(1f))
-        }
+    val downToList = if (state.channels.isEmpty()) {
+        Modifier
+    } else {
+        Modifier.onPreviewKeyEvent(onPreviewKeyEvent = { event ->
+            if (event.key == Key.DirectionDown) {
+                if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                    selectedRowFocus.focusSelected?.invoke()
+                }
+                true
+            } else {
+                false
+            }
+        })
+    }
+    val sourceTitle = if (favorites) stringResource(R.string.favorites) else source?.name ?: stringResource(R.string.library_title)
+    Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp), content = {
+        TvAction(onClick = sourceViewModel::open, modifier = Modifier.focusRequester(focusRequester).then(downToList).widthIn(max = if (compact) 210.dp else 300.dp), containerColor = ButtonPanel, contentPadding = PaddingValues(horizontal = 14.dp), content = {
+            Text(text = sourceTitle, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                painter = painterResource(R.drawable.ic_chevron_down),
+                contentDescription = stringResource(if (favorites) R.string.favorites else R.string.library_title),
+                tint = if (LocalTvActionFocused.current) FocusInk else Muted,
+                modifier = Modifier.size(14.dp)
+            )
+        })
+        Spacer(modifier = Modifier.weight(1f))
         TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.refresh), onClick = onRefresh)
         TvIconButton(description = stringResource(R.string.settings_title), icon = R.drawable.ic_settings, onClick = onSettings)
     })
@@ -205,8 +232,14 @@ private fun HomeSettingsDialog(onClose: () -> Unit, onProxy: () -> Unit, onUpdat
 
 @Composable
 private fun SettingsEntry(icon: Int, title: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
-        TvIconButton(icon = icon, description = title, onClick = onClick, modifier = modifier)
-        Text(text = title, color = Color.White, modifier = Modifier.clearAndSetSemantics(properties = {}))
-    })
+    TvAction(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        containerColor = ButtonPanel,
+        content = {
+            Icon(painter = painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text = title, modifier = Modifier.weight(1f))
+        }
+    )
 }

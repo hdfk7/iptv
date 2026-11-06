@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +35,7 @@ import cn.hdfk7.android.iptv.BuildConfig
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.data.network.PlaylistDownloader
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
+import cn.hdfk7.android.iptv.core.ui.theme.Accent
 import cn.hdfk7.android.iptv.core.ui.theme.DialogSurface
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.CancellationException
@@ -167,8 +169,8 @@ fun AppUpdateDialog(onClose: () -> Unit) {
                 .background(DialogSurface, RoundedCornerShape(22.dp)).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             content = {
-                Text(text = stringResource(R.string.app_update_title), fontSize = 22.sp)
-                Text(text = message)
+                Text(text = stringResource(R.string.app_update_title), color = Color.White, fontSize = 22.sp)
+                Text(text = message, color = Accent, fontSize = 15.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
                     TvIconButton(
                         icon = R.drawable.ic_close,

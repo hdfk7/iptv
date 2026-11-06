@@ -3,6 +3,7 @@ package cn.hdfk7.android.iptv.app
 import android.annotation.SuppressLint
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.graphics.Color
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,6 +35,16 @@ class MainActivity : ComponentActivity() {
         }
         val insets = WindowCompat.getInsetsController(window, window.decorView)
         insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (!television) {
+            // Let the app gradient draw behind the bars; Compose adds the insets back as padding.
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            @Suppress("DEPRECATION")
+            window.statusBarColor = Color.TRANSPARENT
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = Color.TRANSPARENT
+            insets.isAppearanceLightStatusBars = false
+            insets.isAppearanceLightNavigationBars = false
+        }
         setContent(content = {
             val state by viewModel.state.collectAsStateWithLifecycle()
             LaunchedEffect(key1 = state.fullscreen, block = {

@@ -201,8 +201,10 @@ class TvSuite:
 
     def favorites(self):
         self.main()
-        count = len({channel["name"].replace(" ", "").upper() for channel in self.library()["favorites"]})
-        self.click(f"收藏 · {count}")
+        self.manager()
+        action = "正在使用" if self.library()["activeSourceId"] == "favorites" else "启用"
+        self.source_action("收藏", action)
+        self.wait(lambda root: self.has(root, "全屏", "content-desc"))
         assert self.library()["activeSourceId"] == "favorites"
 
     def channel_star(self, name):
@@ -243,7 +245,7 @@ class TvSuite:
         library = self.library()
         self.record("R01", "真实源与收藏首页", "真实仓库", "保留原始配置启动，未显示品牌和操作说明。", {"sources": len(library["sources"]), "favoriteContributions": len(library["favorites"])}, kind="real")
         self.manager()
-        self.record("R02", "两个真实源的管理面板", "真实仓库", "两个源可编辑、删除；仅一个当前源。", kind="real")
+        self.record("R02", "三个真实源的管理面板", "真实仓库", "三个源可编辑、删除；仅一个当前源。", kind="real")
         self.main()
         self.favorites()
         self.play("CCTV1", seconds=150)
@@ -261,9 +263,9 @@ class TvSuite:
     def forms(self):
         self.clear()
         self.wait(lambda root: self.has(root, "CCTV1"), seconds=30)
-        assert len(self.library()["sources"]) == 2
+        assert len(self.library()["sources"]) == 3
         assert not self.library()["favorites"]
-        self.record("S01", "首次启动", "源管理", "首次创建两个内置源，默认选择一个，收藏为空。", kind="real")
+        self.record("S01", "首次启动", "源管理", "首次创建三个内置源，默认选择一个，收藏为空。", kind="real")
         self.key(20)
         self.key(20)
         self.record("S02", "遥控器焦点", "源管理", "方向键移动到列表控件，聚焦描边可见。", kind="real")
@@ -271,7 +273,7 @@ class TvSuite:
         self.wait(lambda root: self.has(root, "暂无收藏"))
         self.record("S03", "收藏空状态", "收藏", "空收藏源可打开，按钮仍可操作。")
         self.manager()
-        self.record("S04", "源列表", "源管理", "收藏源与两个普通源同列展示，只有一个正在使用。")
+        self.record("S04", "源列表", "源管理", "收藏源与三个普通源同列展示，只有一个正在使用。")
         self.click("添加源")
         self.record("S05", "添加源表单", "源管理", "名称、地址和保存/取消控件可见，无额外说明文字。")
         self.save(error="请输入 1–48 个字符的源名称")

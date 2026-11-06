@@ -71,6 +71,10 @@ class SourceManagerViewModel(application: Application) : AndroidViewModel(applic
         perform(action = { repository.activate(id) }, close = true)
     }
 
+    fun restoreDefaults() {
+        perform(action = { repository.restoreDefaults() }, close = true)
+    }
+
     fun showFavorites() {
         activate(SourceLibrary.FAVORITES_ID)
     }

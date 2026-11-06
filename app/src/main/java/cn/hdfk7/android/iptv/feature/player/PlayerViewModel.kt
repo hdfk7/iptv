@@ -20,12 +20,16 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.BuildConfig
 import cn.hdfk7.android.iptv.core.model.ChannelAggregation
+import cn.hdfk7.android.iptv.core.model.ChannelFocusMemory
 import cn.hdfk7.android.iptv.app.IptvApplication
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
 import cn.hdfk7.android.iptv.core.model.LibraryException
 import cn.hdfk7.android.iptv.core.data.repository.RefreshEngine
 import cn.hdfk7.android.iptv.core.model.Channel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,13 +41,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val app = application as IptvApplication
     private val repository = app.playlistRepository
     private val audio = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    internal val channelFocusMemory = ChannelFocusMemory()
     private val mutableState = MutableStateFlow(PlayerState(fixedVolume = audio.isVolumeFixed))
     val state = mutableState.asStateFlow()
     var player: ExoPlayer? by mutableStateOf(null)
         private set
     private var httpClient: okhttp3.OkHttpClient? = null
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var activeChannel: Channel? = null
     private var streamIndex = 0
+    private var firstStreamIndex = 0
     private var wantsPlayback = false
     private var timeout: Job? = null
     private var fallback: Job? = null
@@ -244,17 +251,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val current = player
         player = null
         current?.release()
-        httpClient?.connectionPool?.evictAll()
-        httpClient?.dispatcher?.executorService?.shutdown()
+        val client = httpClient
         httpClient = null
+        if (client != null) {
+            cleanupScope.launch(block = {
+                runCatching(block = { client.connectionPool.evictAll() })
+                client.dispatcher.executorService.shutdown()
+            })
+        }
     }
 
     fun select(channel: Channel) {
+        selectLine(channel, 0)
+    }
+
+    private fun selectLine(channel: Channel, index: Int) {
         generation += 1
         fallback?.cancel()
         timeout?.cancel()
         activeChannel = channel
-        streamIndex = 0
+        streamIndex = index
+        firstStreamIndex = index
         wantsPlayback = true
         mutableState.value = state.value.copy(selectedId = channel.id, selectedName = channel.name, selectedSourceName = channel.sourceName)
         playLine()
@@ -272,7 +289,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             Math.floorMod(current + direction, channels.size)
         }
-        select(channels[next])
+        val channel = channels[next]
+        channelFocusMemory.remember(state.value.activeSourceId, channel.id)
+        select(channel)
+    }
+
+    fun changeStreamLine(direction: Int) {
+        val channel = activeChannel ?: return
+        if (channel.streams.size > 1) {
+            val index = Math.floorMod(state.value.line - 1 + direction, channel.streams.size)
+            selectLine(channel, index)
+        }
+    }
+
+    fun retryCurrentLine() {
+        val channel = activeChannel ?: return
+        val index = state.value.line - 1
+        if (index in channel.streams.indices) {
+            selectLine(channel, index)
+        }
     }
 
     fun retry() {
@@ -346,7 +381,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         timeout?.cancel()
         val expectedGeneration = generation
-        streamIndex += 1
+        val count = activeChannel?.streams?.size ?: return
+        if (count == 0 || streamIndex >= count) {
+            return
+        }
+        val next = (streamIndex + 1) % count
+        streamIndex = if (next == firstStreamIndex) count else next
         // Defer to avoid modifying the player inside its event dispatch.
         fallback = viewModelScope.launch(block = {
             if (generation == expectedGeneration) {

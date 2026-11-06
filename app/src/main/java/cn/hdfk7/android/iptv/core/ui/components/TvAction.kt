@@ -27,17 +27,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 val LocalTvActionFocused = staticCompositionLocalOf(defaultFactory = { false })
 
 @Composable
-fun TvAction(onClick: () -> Unit, modifier: Modifier = Modifier, selected: Boolean = false, enabled: Boolean = true, shape: Shape = RoundedCornerShape(16.dp), focusScale: Float = 1f, containerColor: Color = Panel, contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 6.dp), content: @Composable RowScope.() -> Unit) {
-    var focused by remember(calculation = { mutableStateOf(false) })
+fun TvAction(onClick: () -> Unit, modifier: Modifier = Modifier, selected: Boolean = false, enabled: Boolean = true, shape: Shape = RoundedCornerShape(16.dp), focusScale: Float = 1f, containerColor: Color = Panel, focusFill: Color = FocusFill, focusInk: Color = FocusInk, focusBorderWidth: Dp = 1.dp, contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 6.dp), focusHighlight: Boolean? = null, showUnfocusedBorder: Boolean = true, content: @Composable RowScope.() -> Unit) {
+    var hasFocus by remember(calculation = { mutableStateOf(false) })
+    val focused = focusHighlight ?: hasFocus
     val scale by animateFloatAsState(targetValue = if (focused && enabled) focusScale else 1f, animationSpec = tween(durationMillis = 140), label = "buttonFocusScale")
     val container = when {
         focused -> {
-            FocusFill
+            focusFill
         }
         selected -> {
             SelectedPanel
@@ -49,10 +51,14 @@ fun TvAction(onClick: () -> Unit, modifier: Modifier = Modifier, selected: Boole
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.height(46.dp).graphicsLayer(block = { scaleX = scale; scaleY = scale }).onFocusChanged(onFocusChanged = { focus -> focused = focus.isFocused }),
+        modifier = modifier.height(46.dp).graphicsLayer(block = { scaleX = scale; scaleY = scale }).onFocusChanged(onFocusChanged = { focus -> hasFocus = focus.isFocused }),
         shape = shape,
-        border = BorderStroke(1.dp, if (focused) Accent else Border.copy(alpha = 0.55f)),
-        colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = if (focused) FocusInk else Accent),
+        border = when {
+            focused -> BorderStroke(focusBorderWidth, FocusBorder)
+            showUnfocusedBorder -> BorderStroke(1.dp, Border.copy(alpha = 0.55f))
+            else -> null
+        },
+        colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = if (focused) focusInk else Accent),
         contentPadding = contentPadding,
         content = {
             val scope = this
@@ -63,7 +69,7 @@ fun TvAction(onClick: () -> Unit, modifier: Modifier = Modifier, selected: Boole
 
 @Composable
 fun TvIconButton(@DrawableRes icon: Int, description: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = Color.White, selected: Boolean = false, enabled: Boolean = true) {
-    TvAction(modifier = modifier.size(46.dp), onClick = onClick, selected = selected, enabled = enabled, shape = CircleShape, focusScale = 1.08f, containerColor = ButtonPanel, contentPadding = PaddingValues(0.dp), content = {
+    TvAction(modifier = modifier.size(46.dp), onClick = onClick, selected = selected, enabled = enabled, shape = CircleShape, focusScale = 1.04f, containerColor = ButtonPanel, focusBorderWidth = 1.5.dp, contentPadding = PaddingValues(0.dp), content = {
         Icon(painter = painterResource(icon), contentDescription = description, tint = if (LocalTvActionFocused.current) FocusInk else tint, modifier = Modifier.size(20.dp))
     })
 }

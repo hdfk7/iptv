@@ -6,7 +6,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
@@ -33,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.hdfk7.android.iptv.core.ui.theme.*
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
+import cn.hdfk7.android.iptv.core.ui.components.TvAction
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 
 @Composable
@@ -64,31 +66,48 @@ fun SourceManagerDialog(viewModel: SourceManagerViewModel) {
 private fun SourceList(state: SourceManagerState, library: SourceLibrary, viewModel: SourceManagerViewModel) {
     val inputMode = LocalInputModeManager.current
     val initialFocus = remember(calculation = { FocusRequester() })
-    LaunchedEffect(key1 = Unit, block = { inputMode.requestInputMode(InputMode.Keyboard); initialFocus.requestFocus() })
+    val listState = rememberLazyListState()
+    val activeIndex = remember(library.activeSourceId, library.sources) {
+        val index = library.sources.indexOfFirst(predicate = { source -> source.id == library.activeSourceId })
+        if (library.activeSourceId == SourceLibrary.FAVORITES_ID || index < 0) 0 else index + 1
+    }
+    LaunchedEffect(key1 = Unit, block = {
+        inputMode.requestInputMode(InputMode.Keyboard)
+        runCatching(block = { listState.scrollToItem(activeIndex) })
+        withFrameNanos(onFrame = { })
+        runCatching(block = { initialFocus.requestFocus() })
+    })
     Column(modifier = Modifier.height(408.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = {
         DialogHeader(title = stringResource(R.string.library_title), onClose = viewModel::back)
-        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), content = {
+        LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), content = {
             item(key = SourceLibrary.FAVORITES_ID, content = {
-                SourceCard(name = stringResource(R.string.favorites), detail = library.favorites.distinctBy(selector = { channel -> channel.key }).size.toString(), active = library.activeSourceId == SourceLibrary.FAVORITES_ID, icon = R.drawable.ic_star, busy = state.busy, onActivate = viewModel::showFavorites, modifier = Modifier.focusRequester(initialFocus))
+                SourceCard(name = stringResource(R.string.favorites), detail = library.favorites.distinctBy(selector = { channel -> channel.key }).size.toString(), active = library.activeSourceId == SourceLibrary.FAVORITES_ID, busy = state.busy, onActivate = viewModel::showFavorites, modifier = if (activeIndex == 0) Modifier.focusRequester(initialFocus) else Modifier)
             })
-            items(items = library.sources, key = { source -> source.id }, itemContent = { source ->
-                SourceCard(name = source.name, detail = source.url, active = library.activeSourceId == source.id, icon = R.drawable.ic_source, busy = state.busy, onActivate = { viewModel.activate(source.id) }, onEdit = { viewModel.edit(source) }, onDelete = { viewModel.askDelete(source) })
+            itemsIndexed(items = library.sources, key = { _, source -> source.id }, itemContent = { index, source ->
+                SourceCard(name = source.name, detail = source.url, active = library.activeSourceId == source.id, busy = state.busy, onActivate = { viewModel.activate(source.id) }, onEdit = { viewModel.edit(source) }, onDelete = { viewModel.askDelete(source) }, modifier = if (activeIndex == index + 1) Modifier.focusRequester(initialFocus) else Modifier)
             })
         })
         SourceError(error = state.error)
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, content = {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = {
             TvIconButton(description = stringResource(R.string.source_add), icon = R.drawable.ic_add, onClick = viewModel::add, enabled = !state.busy)
+            if (library.sources.isEmpty()) {
+                TvAction(onClick = viewModel::restoreDefaults, enabled = !state.busy, containerColor = ButtonPanel, contentPadding = PaddingValues(horizontal = 16.dp), content = {
+                    Icon(painter = painterResource(R.drawable.ic_refresh), contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = stringResource(R.string.source_restore), fontSize = 14.sp)
+                })
+            }
+            Spacer(modifier = Modifier.weight(1f))
         })
     })
 }
 
 @Composable
-private fun SourceCard(name: String, detail: String, active: Boolean, icon: Int, busy: Boolean, onActivate: () -> Unit, modifier: Modifier = Modifier, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null) {
+private fun SourceCard(name: String, detail: String, active: Boolean, busy: Boolean, onActivate: () -> Unit, modifier: Modifier = Modifier, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null) {
     Row(modifier = Modifier.fillMaxWidth().background(if (active) SelectedPanel else PanelAlt, RoundedCornerShape(14.dp)).border(1.dp, if (active) Accent.copy(alpha = 0.4f) else Border, RoundedCornerShape(14.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp), content = {
-        Icon(painter = painterResource(icon), contentDescription = null, tint = if (icon == R.drawable.ic_star) Gold else Accent, modifier = Modifier.size(24.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp), content = {
             Text(text = name, fontWeight = FontWeight.SemiBold, color = Color.White, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(text = detail, color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = detail, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         })
         TvIconButton(description = stringResource(if (active) R.string.source_current else R.string.source_use), icon = if (active) R.drawable.ic_check else R.drawable.ic_play, onClick = onActivate, selected = active, enabled = !busy, modifier = modifier)
         if (onEdit != null) {

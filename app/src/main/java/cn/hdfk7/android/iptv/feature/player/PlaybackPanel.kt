@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
 import androidx.compose.ui.unit.sp
 import cn.hdfk7.android.iptv.R
+import cn.hdfk7.android.iptv.core.ui.components.TvAction
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 import cn.hdfk7.android.iptv.core.ui.theme.*
 
@@ -58,14 +59,23 @@ internal fun PlaybackPanel(state: PlayerState, viewModel: PlayerViewModel, modif
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), content = {
                 Text(text = state.selectedName.orEmpty(), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = if (touchControls) 19.sp else 23.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (state.selectedSourceName != null && (!touchControls || state.activeSourceId == SourceLibrary.FAVORITES_ID)) {
-                    Text(text = state.selectedSourceName, color = Muted, fontSize = 11.sp)
+                    Text(text = state.selectedSourceName, color = Muted, fontSize = 12.sp)
                 }
             })
             if (narrowTv && state.line > 0) {
-                StreamLineBadge(state = state)
+                StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine)
             }
             if (state.selectedId != null) {
-                TvIconButton(icon = if (state.selectedId in state.favoriteIds) R.drawable.ic_star_filled else R.drawable.ic_star, description = stringResource(if (state.selectedId in state.favoriteIds) R.string.favorite_remove else R.string.favorite_add), onClick = viewModel::toggleCurrentFavorite, tint = if (state.selectedId in state.favoriteIds) Gold else Muted)
+                TvIconButton(icon = if (state.selectedId in state.favoriteIds) R.drawable.ic_star_filled else R.drawable.ic_star, description = stringResource(if (state.selectedId in state.favoriteIds) R.string.favorite_remove else R.string.favorite_add), onClick = viewModel::toggleCurrentFavorite, tint = if (state.selectedId in state.favoriteIds) Gold else Muted, modifier = Modifier.onPreviewKeyEvent(onPreviewKeyEvent = { event ->
+                    if (event.key == Key.DirectionLeft) {
+                        if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                            selectedRowFocus.focusSelected?.invoke()
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }))
             }
         })
         val preview = if (previewHeight == null) Modifier.weight(1f) else Modifier.height(previewHeight)
@@ -85,25 +95,15 @@ internal fun PlaybackPanel(state: PlayerState, viewModel: PlayerViewModel, modif
                 false
             }
         }).focusable().semantics(properties = {
-            if (!touchControls) {
-                contentDescription = fullscreenDescription
-                role = Role.Button
-                onClick(action = { viewModel.enterFullscreen(); true })
-            }
+            contentDescription = fullscreenDescription
+            role = Role.Button
+            onClick(action = { viewModel.enterFullscreen(); true })
         }).pointerInput(key1 = viewModel, block = { detectTapGestures(onTap = { viewModel.enterFullscreen() }) }), content = {
             PlaybackSurface(state = state, modifier = Modifier.fillMaxSize().onGloballyPositioned(onGloballyPositioned = { coordinates ->
                 onVideoBounds(Rect(coordinates.positionInRoot(), Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
             }))
-            if (touchControls && state.selectedId != null) {
-                TvIconButton(
-                    icon = R.drawable.ic_fullscreen,
-                    description = fullscreenDescription,
-                    onClick = viewModel::enterFullscreen,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
-                )
-            }
             if (videoFocused) {
-                Box(modifier = Modifier.matchParentSize().border(2.dp, Accent, RoundedCornerShape(18.dp)))
+                Box(modifier = Modifier.matchParentSize().border(2.dp, FocusBorder, RoundedCornerShape(18.dp)))
             }
         })
         PlaybackControls(state = state, viewModel = viewModel, selectedRowFocus = selectedRowFocus, touchControls = touchControls, narrowTv = narrowTv)
@@ -132,12 +132,6 @@ internal fun PlaybackSurface(state: PlayerState, modifier: Modifier) {
                 if (state.playback != PlaybackStatus.IDLE) {
                     Text(text = playbackMessage(state), color = Color.White, fontSize = 16.sp)
                 }
-            })
-        }
-        if (!state.fullscreen) {
-            Row(modifier = Modifier.align(Alignment.TopStart).padding(14.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 9.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, content = {
-                Box(modifier = Modifier.size(5.dp).background(if (state.playback == PlaybackStatus.PLAYING) Accent else Muted, CircleShape))
-                Text(text = stringResource(R.string.live_label), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Medium)
             })
         }
         if (state.playback == PlaybackStatus.PAUSED) {
@@ -174,7 +168,7 @@ private fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel, sel
         Row(modifier = controls, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (narrowTv) 6.dp else 8.dp), content = {
             TvIconButton(icon = R.drawable.ic_previous, description = stringResource(R.string.previous), onClick = { viewModel.changeChannel(-1) }, modifier = Modifier.onPreviewKeyEvent(onPreviewKeyEvent = { event ->
                 if (event.key == Key.DirectionLeft) {
-                    if (event.type == KeyEventType.KeyDown) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                         selectedRowFocus.restore?.invoke()
                     }
                     true
@@ -184,12 +178,12 @@ private fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel, sel
             }))
             TvIconButton(description = stringResource(if (state.playback == PlaybackStatus.PLAYING) R.string.pause else R.string.play), icon = if (state.playback == PlaybackStatus.PLAYING) R.drawable.ic_pause else R.drawable.ic_play, onClick = viewModel::togglePlayback, selected = true)
             TvIconButton(icon = R.drawable.ic_next, description = stringResource(R.string.next), onClick = { viewModel.changeChannel(1) })
-            TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.retry), onClick = viewModel::retry)
+            TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.retry_current_line), onClick = viewModel::retryCurrentLine)
             if (!touchControls) {
                 Spacer(modifier = Modifier.weight(1f))
             }
             if (!narrowTv && state.line > 0) {
-                StreamLineBadge(state = state)
+                StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine)
             }
             if (!touchControls) {
                 TvIconButton(icon = R.drawable.ic_volume_down, description = stringResource(R.string.volume_down), onClick = { viewModel.changeVolume(android.media.AudioManager.ADJUST_LOWER) })
@@ -203,20 +197,44 @@ private fun PlaybackControls(state: PlayerState, viewModel: PlayerViewModel, sel
 }
 
 @Composable
-private fun StreamLineBadge(state: PlayerState) {
+internal fun StreamLineBadge(state: PlayerState, onSwitch: (Int) -> Unit) {
     val statusColor = when (state.playback) {
         PlaybackStatus.ERROR, PlaybackStatus.LOADING -> Gold
         else -> Accent
     }
+    val enabled = state.lineCount > 1
+    val shape = RoundedCornerShape(23.dp)
     Row(
-        modifier = Modifier.height(34.dp).clip(RoundedCornerShape(17.dp)).background(PanelAlt).border(1.dp, Border, RoundedCornerShape(17.dp)).padding(horizontal = 12.dp),
+        modifier = Modifier.clip(shape).background(PanelAlt).border(1.dp, Border, shape),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
         content = {
-            Icon(painter = painterResource(R.drawable.ic_signal), contentDescription = stringResource(R.string.line_detail, state.line, state.lineCount), tint = statusColor, modifier = Modifier.size(16.dp))
-            Text(text = state.line.toString().padStart(2, '0'), color = statusColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            val previousLine = stringResource(R.string.previous_line)
+            TvAction(
+                onClick = { onSwitch(-1) },
+                modifier = Modifier.width(48.dp).semantics(properties = { contentDescription = previousLine }),
+                shape = RoundedCornerShape(topStart = 23.dp, bottomStart = 23.dp),
+                enabled = enabled,
+                containerColor = Color.Transparent,
+                showUnfocusedBorder = false,
+                contentPadding = PaddingValues(horizontal = 8.dp),
+                content = {
+                    Text(text = state.line.toString().padStart(2, '0'), color = statusColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            )
             Box(modifier = Modifier.width(1.dp).height(12.dp).background(Divider))
-            Text(text = state.lineCount.toString().padStart(2, '0'), color = Muted, fontSize = 12.sp)
+            val nextLine = stringResource(R.string.next_line)
+            TvAction(
+                onClick = { onSwitch(1) },
+                shape = RoundedCornerShape(topEnd = 23.dp, bottomEnd = 23.dp),
+                enabled = enabled,
+                modifier = Modifier.width(48.dp).semantics(properties = { contentDescription = nextLine }),
+                containerColor = Color.Transparent,
+                showUnfocusedBorder = false,
+                contentPadding = PaddingValues(horizontal = 8.dp),
+                content = {
+                    Text(text = state.lineCount.toString().padStart(2, '0'), color = Muted, fontSize = 12.sp)
+                }
+            )
         }
     )
 }

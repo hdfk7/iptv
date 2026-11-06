@@ -22,6 +22,7 @@
     <string name="source_current">正在使用</string>
     <string name="source_use">启用</string>
     <string name="source_add">添加源</string>
+    <string name="source_restore">恢复默认源</string>
     <string name="source_edit">编辑源</string>
     <string name="source_delete">删除源</string>
     <string name="source_delete_title">删除「%1$s」？</string>
@@ -41,7 +42,6 @@
     <string name="favorites_empty">暂无收藏</string>
     <string name="favorite_add">收藏节目</string>
     <string name="favorite_remove">取消收藏</string>
-    <string name="live_label">直播</string>
     <string name="line_detail">线路 %1$d / %2$d</string>
     <string name="source_aggregate">自动汇总各源收藏</string>
     <string name="channel_number">%1$03d</string>
@@ -74,4 +74,7 @@
     <string name="app_update_close">关闭更新窗口</string>
     <string name="settings_title">设置</string>
     <string name="settings_close">关闭设置</string>
+    <string name="previous_line">上一条线路</string>
+    <string name="next_line">下一条线路</string>
+    <string name="retry_current_line">重连当前线路</string>
 </resources>

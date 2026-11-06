@@ -19,10 +19,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -42,7 +47,6 @@ import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.model.Channel
 import cn.hdfk7.android.iptv.core.model.ChannelFocusMemory
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
-import cn.hdfk7.android.iptv.core.ui.components.LocalTvActionFocused
 import cn.hdfk7.android.iptv.core.ui.components.TvAction
 import cn.hdfk7.android.iptv.core.ui.theme.*
 import java.text.DateFormat
@@ -54,52 +58,74 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+private const val FOCUS_CHANNEL_SWITCH_DELAY_MS = 150L
+
 private object NoFocusScrollSpec : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
 }
 
-internal class ChannelListFocus {
+internal class ChannelListFocus(val memory: ChannelFocusMemory) {
     val requesters = mutableStateMapOf<String, FocusRequester>()
-    val memory = ChannelFocusMemory()
     var restore: (() -> Unit)? = null
+    var focusSelected: (() -> Unit)? = null
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modifier: Modifier, compact: Boolean, requestInitialFocus: Boolean, onInitialFocus: () -> Unit, selectedRowFocus: ChannelListFocus, videoFocus: FocusRequester) {
+internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modifier: Modifier, compact: Boolean, television: Boolean, requestInitialFocus: Boolean, onInitialFocus: () -> Unit, selectedRowFocus: ChannelListFocus, videoFocus: FocusRequester) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
-    val listState = rememberLazyListState()
+    val selectedIndex = state.channels.indexOfFirst(predicate = { channel -> channel.id == state.selectedId })
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex.coerceAtLeast(0))
     val scope = rememberCoroutineScope()
     var focusSelection by remember(calculation = { mutableStateOf<Job?>(null) })
+    var pendingChannel by remember(calculation = { mutableStateOf<Channel?>(null) })
+    var focusedIndex by remember(calculation = { mutableIntStateOf(-1) })
+    var pendingFocusMove by remember(calculation = { mutableStateOf<Job?>(null) })
+    val reveal: suspend (Channel?) -> Unit = { target ->
+        if (target != null) {
+            val index = state.channels.indexOf(target)
+            if (index >= 0) {
+                listState.revealItem(index = index)
+                withTimeoutOrNull(1000, block = {
+                    val requester = snapshotFlow(block = { selectedRowFocus.requesters[target.id] }).first(predicate = { requester -> requester != null })
+                    withFrameNanos(onFrame = { })
+                    requester?.requestFocus()
+                })
+            }
+        }
+    }
     SideEffect(effect = {
         selectedRowFocus.restore = {
             scope.launch(block = {
-                val target = selectedRowFocus.memory.target(state.activeSourceId, state.channels, state.selectedId)
-                if (target != null) {
-                    val index = state.channels.indexOf(target)
-                    if (listState.layoutInfo.visibleItemsInfo.none(predicate = { item -> item.index == index })) {
-                        listState.scrollToItem(index)
-                    }
-                    withTimeoutOrNull(1000, block = {
-                        val requester = snapshotFlow(block = { selectedRowFocus.requesters[target.id] }).first(predicate = { requester -> requester != null })
-                        withFrameNanos(onFrame = { })
-                        requester?.requestFocus()
-                    })
-                }
+                reveal(selectedRowFocus.memory.target(state.activeSourceId, state.channels, state.selectedId))
+            })
+        }
+        selectedRowFocus.focusSelected = {
+            scope.launch(block = {
+                reveal(state.channels.firstOrNull(predicate = { channel -> channel.id == state.selectedId }) ?: state.channels.firstOrNull())
             })
         }
     })
+    var listHasFocus by remember(calculation = { mutableStateOf(false) })
     var enteringList by remember(calculation = { mutableStateOf(false) })
     val selectChannel: (Channel) -> Unit = { channel ->
         if (channel.id != state.selectedId || state.playback == PlaybackStatus.IDLE || state.playback == PlaybackStatus.ERROR) {
             onSelect(channel)
         }
     }
-    LaunchedEffect(key1 = state.activeSourceId, block = { listState.scrollToItem(0) })
-    LaunchedEffect(key1 = state.selectedId, key2 = state.channels.size, block = {
-        val index = state.channels.indexOfFirst(predicate = { channel -> channel.id == state.selectedId })
-        if (index >= 0) {
-            listState.centerItem(index = index)
+    val commitChannel: (Channel) -> Unit = { channel ->
+        focusSelection?.cancel()
+        pendingChannel = null
+        selectChannel(channel)
+    }
+    LaunchedEffect(key1 = state.activeSourceId, key2 = selectedIndex, key3 = state.selectedId, block = {
+        if (listHasFocus) {
+            return@LaunchedEffect
+        }
+        if (selectedIndex >= 0) {
+            listState.revealItem(index = selectedIndex)
+        } else {
+            listState.scrollToItem(0)
         }
     })
     Column(
@@ -126,23 +152,65 @@ internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modif
             } else {
                 CompositionLocalProvider(LocalBringIntoViewSpec provides NoFocusScrollSpec) {
                     LazyColumn(state = listState, modifier = Modifier.weight(1f).onFocusChanged(onFocusChanged = { focus ->
+                        listHasFocus = focus.hasFocus
                         if (!focus.hasFocus) {
                             enteringList = true
+                            focusedIndex = -1
+                            if (pendingFocusMove?.isActive != true) {
+                                pendingChannel?.let(block = commitChannel)
+                            }
                             focusSelection?.cancel()
+                            pendingChannel = null
+                            pendingFocusMove?.cancel()
                         }
+                    }).onPreviewKeyEvent(onPreviewKeyEvent = { event ->
+                        val step = when (event.key) {
+                            Key.DirectionUp -> -1
+                            Key.DirectionDown -> 1
+                            else -> return@onPreviewKeyEvent false
+                        }
+                        if (focusedIndex < 0) {
+                            return@onPreviewKeyEvent false
+                        }
+                        val targetIndex = focusedIndex + step
+                        val target = state.channels.getOrNull(targetIndex) ?: return@onPreviewKeyEvent false
+                        if (event.type == KeyEventType.KeyDown && pendingFocusMove?.isActive != true) {
+                            focusSelection?.cancel()
+                            if (listState.isItemFullyVisible(targetIndex) && selectedRowFocus.requesters[target.id]?.requestFocus() == true) {
+                                return@onPreviewKeyEvent true
+                            }
+                            pendingFocusMove = scope.launch(block = {
+                                val info = listState.layoutInfo
+                                val lastVisible = info.visibleItemsInfo.lastOrNull()
+                                if (lastVisible != null && targetIndex == lastVisible.index + 1) {
+                                    listState.scrollBy(value = (lastVisible.size + info.mainAxisItemSpacing).toFloat())
+                                }
+                                reveal(target)
+                            })
+                        }
+                        true
                     }), verticalArrangement = Arrangement.spacedBy(6.dp), content = {
                         itemsIndexed(items = state.channels, key = { _, channel -> channel.id }, itemContent = { index, channel ->
-                            ChannelRow(channel = channel, index = index, selected = channel.id == state.selectedId, showSource = favorites, requestFocus = requestInitialFocus && index == 0, selectedRowFocus = selectedRowFocus, onInitialFocus = onInitialFocus, onVideoFocus = { focusSelection?.cancel(); selectChannel(channel); videoFocus.requestFocus() }, onFocused = {
+                            ChannelRow(channel = channel, index = index, selected = { focusedIndex < 0 && !listHasFocus && channel.id == state.selectedId }, highlighted = { focusedIndex == index }, showSource = favorites, requestFocus = requestInitialFocus && index == 0, selectedRowFocus = selectedRowFocus, onInitialFocus = onInitialFocus, onVideoFocus = { commitChannel(channel); videoFocus.requestFocus() }, onFocused = {
+                                focusedIndex = index
                                 if (enteringList) {
                                     enteringList = false
                                 } else {
                                     focusSelection?.cancel()
+                                    pendingChannel = channel
                                     focusSelection = scope.launch(block = {
-                                        delay(300)
+                                        delay(FOCUS_CHANNEL_SWITCH_DELAY_MS)
+                                        pendingChannel = null
                                         selectChannel(channel)
                                     })
                                 }
-                            }, onSelect = { focusSelection?.cancel(); selectChannel(channel) })
+                            }, onSelect = {
+                                val moveToVideo = television && channel.id == state.selectedId
+                                commitChannel(channel)
+                                if (moveToVideo) {
+                                    videoFocus.requestFocus()
+                                }
+                            })
                         })
                     })
                 }
@@ -151,27 +219,32 @@ internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modif
     )
 }
 
-private suspend fun LazyListState.centerItem(index: Int) {
+private fun LazyListState.isItemFullyVisible(index: Int): Boolean {
     val info = layoutInfo
-    val visible = info.visibleItemsInfo.firstOrNull(predicate = { item -> item.index == index })
-    if (visible != null) {
-        val delta = visible.offset + visible.size / 2 - info.viewportSize.height / 2
-        if (delta != 0) {
-            scrollBy(value = delta.toFloat())
-        }
+    val item = info.visibleItemsInfo.firstOrNull(predicate = { visibleItem -> visibleItem.index == index }) ?: return false
+    return item.offset >= info.viewportStartOffset && item.offset + item.size <= info.viewportEndOffset
+}
+
+private suspend fun LazyListState.revealItem(index: Int) {
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.firstOrNull(predicate = { visibleItem -> visibleItem.index == index })
+    if (item == null) {
+        scrollToItem(index = index)
         return
     }
-    scrollToItem(index = index)
-    val after = layoutInfo
-    val item = after.visibleItemsInfo.firstOrNull(predicate = { visibleItem -> visibleItem.index == index }) ?: return
-    val delta = item.offset + item.size / 2 - after.viewportSize.height / 2
+    val itemEnd = item.offset + item.size
+    val delta = when {
+        item.offset < info.viewportStartOffset -> item.offset - info.viewportStartOffset
+        itemEnd > info.viewportEndOffset -> itemEnd - info.viewportEndOffset
+        else -> 0
+    }
     if (delta != 0) {
         scrollBy(value = delta.toFloat())
     }
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: ChannelListFocus, onInitialFocus: () -> Unit, onVideoFocus: () -> Unit, onFocused: () -> Unit, onSelect: () -> Unit) {
+private fun ChannelRow(channel: Channel, index: Int, selected: () -> Boolean, highlighted: () -> Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: ChannelListFocus, onInitialFocus: () -> Unit, onVideoFocus: () -> Unit, onFocused: () -> Unit, onSelect: () -> Unit) {
     val channelFocus = remember(calculation = { FocusRequester() })
     val view = LocalView.current
     val inputMode = LocalInputModeManager.current
@@ -198,7 +271,28 @@ private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, showSour
         }
     })
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), content = {
-        TvAction(modifier = Modifier.fillMaxWidth().height(58.dp).focusRequester(channelFocus).onPreviewKeyEvent(onPreviewKeyEvent = { event ->
+        TvAction(modifier = Modifier.fillMaxWidth().height(58.dp).drawBehind(onDraw = {
+            // Lazy rows can recompose separately as they enter the viewport. Resolve the fill when drawing.
+            val focused = highlighted()
+            val fill = when {
+                focused -> FocusFill
+                selected() -> SelectedPanel
+                else -> Panel
+            }
+            val radius = 16.dp.toPx()
+            drawRoundRect(color = fill, cornerRadius = CornerRadius(radius))
+            if (focused) {
+                val strokeWidth = 1.dp.toPx()
+                val inset = strokeWidth / 2
+                drawRoundRect(
+                    color = FocusBorder,
+                    topLeft = Offset(inset, inset),
+                    size = Size(size.width - strokeWidth, size.height - strokeWidth),
+                    cornerRadius = CornerRadius(radius - inset),
+                    style = Stroke(width = strokeWidth)
+                )
+            }
+        }).focusRequester(channelFocus).onPreviewKeyEvent(onPreviewKeyEvent = { event ->
             if (event.key == Key.DirectionRight) {
                 if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                     onVideoFocus()
@@ -212,11 +306,13 @@ private fun ChannelRow(channel: Channel, index: Int, selected: Boolean, showSour
                 selectedRowFocus.memory.remember(channel.sourceId, channel.id)
                 onFocused()
             }
-        }), onClick = onSelect, selected = selected, content = {
-            Text(text = stringResource(R.string.channel_number, index + 1), fontSize = 10.sp, color = if (LocalTvActionFocused.current) FocusInk.copy(alpha = 0.65f) else if (selected) Accent else Muted, modifier = Modifier.width(25.dp))
+        }), onClick = onSelect, containerColor = Color.Transparent, focusHighlight = false, content = {
+            val focused = highlighted()
+            val playing = selected()
+            Text(text = stringResource(R.string.channel_number, index + 1), fontSize = 11.sp, color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, modifier = Modifier.width(28.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), content = {
-                Text(text = channel.name, color = if (LocalTvActionFocused.current) FocusInk else Accent, fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(text = if (showSource) channel.sourceName else channel.group, color = if (LocalTvActionFocused.current) FocusInk.copy(alpha = 0.65f) else if (selected) Accent else Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = channel.name, color = if (focused) FocusInk else Accent, fontSize = 14.sp, fontWeight = if (playing || focused) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = if (showSource) channel.sourceName else channel.group, color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             })
         })
     })
@@ -234,7 +330,7 @@ private fun CatalogMessage(state: PlayerState) {
             Text(text = stringResource(R.string.source_aggregate), color = Muted, fontSize = 11.sp)
         } else if (state.updatedAt != null) {
             val timestamp = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(state.updatedAt))
-            Text(text = stringResource(R.string.updated, timestamp), color = Muted, fontSize = 10.sp)
+            Text(text = stringResource(R.string.updated, timestamp), color = Muted, fontSize = 11.sp)
         }
         if (state.stale) {
             Text(text = stringResource(R.string.stale), color = Gold, fontSize = 11.sp)

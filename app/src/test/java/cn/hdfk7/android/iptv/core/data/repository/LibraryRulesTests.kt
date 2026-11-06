@@ -8,17 +8,43 @@ class LibraryRulesTests {
     @Test
     fun shortensOnlyUnmodifiedDefaultSourceNames() {
         val defaults = LibraryRules.defaults()
-        assertEquals(listOf("精选", "综合"), defaults.sources.map(transform = { source -> source.name }))
-        val legacy = defaults.copy(sources = listOf(defaults.sources[0].copy(name = "best-fan · 每日精选"), defaults.sources[1].copy(name = "myIPTV · IPv4")))
+        assertEquals(listOf("国内精选", "综合频道", "全球频道"), defaults.sources.map(transform = { source -> source.name }))
+        val legacy = defaults.copy(sources = listOf(defaults.sources[0].copy(name = "best-fan · 每日精选"), defaults.sources[1].copy(name = "myIPTV · IPv4"), defaults.sources[2]))
         assertEquals(defaults, LibraryRules.shortenDefaultNames(legacy))
         val custom = legacy.copy(sources = legacy.sources.map(transform = { source -> source.copy(name = "自定义") }))
         assertEquals(custom, LibraryRules.shortenDefaultNames(custom))
     }
 
     @Test
+    fun restoreDefaultsBringsBackStockSourcesAndKeepsFavorites() {
+        val favorite = Channel("CCTV1", "TV", listOf("https://example.org/live"), "best-fan", "精选")
+        val emptied = LibraryRules.defaults().let { library ->
+            LibraryRules.toggleFavorite(library, favorite).copy(sources = emptyList(), activeSourceId = SourceLibrary.FAVORITES_ID)
+        }
+        val restored = LibraryRules.restoreDefaults(emptied)
+        assertEquals(listOf("国内精选", "综合频道", "全球频道"), restored.sources.map(transform = { source -> source.name }))
+        assertEquals("best-fan", restored.activeSourceId)
+        assertEquals(listOf(favorite), restored.favorites)
+    }
+
+    @Test
+    fun addsNewStockSourceOnlyToUntouchedLibrary() {
+        val stock = LibraryRules.defaults()
+        val legacy = stock.copy(sources = stock.sources.take(2))
+        val migrated = LibraryRules.appendNewDefaults(legacy)
+        assertEquals(listOf("国内精选", "综合频道", "全球频道"), migrated.sources.map(transform = { source -> source.name }))
+        assertEquals(stock, LibraryRules.appendNewDefaults(stock))
+        val custom = stock.copy(sources = libraryOf("custom"))
+        assertEquals(custom, LibraryRules.appendNewDefaults(custom))
+    }
+
+    private fun libraryOf(name: String) = listOf(PlaylistSource("custom-id", name, "https://example.org/x.m3u"))
+
+    @Test
     fun knownRepositoriesAndGithubFileLinksResolveToRawPlaylists() {
         assertEquals(LibraryRules.MYIPTV_URL, LibraryRules.normalizeAddress("https://github.com/suxuang/myIPTV/"))
         assertEquals(LibraryRules.DEFAULT_URL, LibraryRules.normalizeAddress("https://github.com/best-fan/iptv-sources.git"))
+        assertEquals(LibraryRules.IPTV_ORG_URL, LibraryRules.normalizeAddress("https://github.com/iptv-org/iptv"))
         assertEquals("https://example.org/playlist/", LibraryRules.normalizeAddress("https://example.org/playlist/"))
         assertEquals("https://raw.githubusercontent.com/owner/repo/main/tv.m3u", LibraryRules.normalizeAddress("https://github.com/owner/repo/blob/main/tv.m3u"))
         for (url in listOf("file:///tmp/test", "ftp://example.org/tv", "https://user:pass@example.org/tv", "https://github.com/unknown/repo", "not a url")) {
@@ -34,7 +60,7 @@ class LibraryRulesTests {
         assertEquals("Custom", added.sources.last().name)
         val edited = LibraryRules.save(added, "custom", "Renamed", "https://example.org/b.m3u")
         assertEquals("custom", edited.sources.last().id)
-        assertEquals(3, edited.sources.size)
+        assertEquals(initial.sources.size + 1, edited.sources.size)
         val active = LibraryRules.activate(edited, "custom")
         assertEquals("custom", active.activeSourceId)
         assertEquals(SourceLibrary.FAVORITES_ID, LibraryRules.activate(active, SourceLibrary.FAVORITES_ID).activeSourceId)
@@ -57,6 +83,8 @@ class LibraryRulesTests {
         assertEquals("myiptv", library.activeSourceId)
         assertEquals(listOf(favorite), library.favorites)
         library = LibraryRules.delete(library, "myiptv")
+        assertEquals("iptv-org", library.activeSourceId)
+        library = LibraryRules.delete(library, "iptv-org")
         assertEquals(SourceLibrary.FAVORITES_ID, library.activeSourceId)
         assertTrue(library.sources.isEmpty())
         assertEquals(1, library.favorites.size)

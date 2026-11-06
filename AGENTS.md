@@ -9,7 +9,7 @@ Use native Kotlin and Compose. Keep packages under cn.hdfk7.android.iptv:
 
 Follow these Kotlin readability conventions: four spaces, multiline braced control-flow bodies, explicit return types, explicit lambda parameters, named callbacks and Compose slot arguments, no trailing lambda syntax, one top-level root per UI composable. Put text in strings.xml and graphics in drawable resources. Separate behavior from presentation.
 
-Target Android 14 (API 34); do not call newer platform APIs without guards. Unit tests use JUnit 5 and names ending Tests. Do not embed channel lists; follow the explicit signing rules below. Build with ./gradlew :app:testDebugUnitTest :app:assembleDebug.
+Target Android 14 (API 34); do not call newer platform APIs without guards. Unit tests use JUnit 5 and names ending Tests. Do not embed channel lists; follow the explicit signing rules below. Build and run unit tests with ./gradlew :app:testDebugUnitTest :app:assembleRelease. For every device or emulator test, install the signed Release APK generated from the current source and verify the installed version before testing. Use the packaged Release APK for all UI checks and screenshots.
 
 ## Source and playback behavior
 

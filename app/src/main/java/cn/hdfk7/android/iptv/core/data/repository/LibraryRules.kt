@@ -11,11 +11,13 @@ import java.util.UUID
 object LibraryRules {
     const val DEFAULT_URL = "https://raw.githubusercontent.com/best-fan/iptv-sources/main/cn_all.m3u8"
     const val MYIPTV_URL = "https://raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u"
+    const val IPTV_ORG_URL = "https://iptv-org.github.io/iptv/index.m3u"
 
     fun defaults(): SourceLibrary {
         val sources = listOf(
-            PlaylistSource("best-fan", "精选", DEFAULT_URL),
-            PlaylistSource("myiptv", "综合", MYIPTV_URL)
+            PlaylistSource("best-fan", "国内精选", DEFAULT_URL),
+            PlaylistSource("myiptv", "综合频道", MYIPTV_URL),
+            PlaylistSource("iptv-org", "全球频道", IPTV_ORG_URL)
         )
         return SourceLibrary(sources, sources.first().id)
     }
@@ -23,8 +25,9 @@ object LibraryRules {
     fun shortenDefaultNames(library: SourceLibrary): SourceLibrary {
         val renamed = library.sources.map(transform = { source ->
             when {
-                source.id == "best-fan" && source.url == DEFAULT_URL && source.name == "best-fan · 每日精选" -> source.copy(name = "精选")
-                source.id == "myiptv" && source.url == MYIPTV_URL && source.name == "myIPTV · IPv4" -> source.copy(name = "综合")
+                source.id == "best-fan" && source.url == DEFAULT_URL && source.name in listOf("best-fan · 每日精选", "精选", "01 精选") -> source.copy(name = "国内精选")
+                source.id == "myiptv" && source.url == MYIPTV_URL && source.name in listOf("myIPTV · IPv4", "综合", "02 综合") -> source.copy(name = "综合频道")
+                source.id == "iptv-org" && source.url == IPTV_ORG_URL && source.name in listOf("iptv-org", "03 iptv-org") -> source.copy(name = "全球频道")
                 else -> source
             }
         })
@@ -38,6 +41,20 @@ object LibraryRules {
                 channel
             }
         }))
+    }
+
+    fun restoreDefaults(library: SourceLibrary): SourceLibrary {
+        val sources = defaults().sources
+        return library.copy(sources = sources, activeSourceId = sources.first().id)
+    }
+
+    fun appendNewDefaults(library: SourceLibrary): SourceLibrary {
+        val stock = listOf("best-fan" to DEFAULT_URL, "myiptv" to MYIPTV_URL)
+        val untouched = library.sources.size == stock.size && stock.all(predicate = { (id, url) -> library.sources.any(predicate = { source -> source.id == id && source.url == url }) })
+        if (!untouched) {
+            return library
+        }
+        return library.copy(sources = library.sources + PlaylistSource("iptv-org", "全球频道", IPTV_ORG_URL))
     }
 
     fun normalizeAddress(address: String): String {
@@ -54,6 +71,9 @@ object LibraryRules {
             }
             if (path.equals("suxuang/myIPTV", ignoreCase = true)) {
                 return MYIPTV_URL
+            }
+            if (path.equals("iptv-org/iptv", ignoreCase = true)) {
+                return IPTV_ORG_URL
             }
             val parts = uri.rawPath.trim('/').split('/')
             if (parts.size >= 5 && parts[2] == "blob") {

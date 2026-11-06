@@ -6,6 +6,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
@@ -31,6 +31,7 @@ import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 import cn.hdfk7.android.iptv.core.ui.theme.Gold
 import cn.hdfk7.android.iptv.core.ui.theme.Muted
+import cn.hdfk7.android.iptv.core.ui.theme.DialogSurface
 
 @Composable
 internal fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel, touchControls: Boolean) {
@@ -49,6 +50,9 @@ internal fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel, to
             surfaceFocus.requestFocus()
         }
     })
+    val retryLineButton: @Composable () -> Unit = {
+        TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.retry_current_line), onClick = viewModel::retryCurrentLine)
+    }
     val revealOnTouch = if (touchControls) {
         Modifier.pointerInput(key1 = viewModel, block = {
             detectTapGestures(onTap = { viewModel.showInformation() })
@@ -85,19 +89,42 @@ internal fun FullscreenPlayer(state: PlayerState, viewModel: PlayerViewModel, to
         content = {
             PlaybackSurface(state = state, modifier = Modifier.fillMaxSize())
             if (state.infoVisible) {
+                val controlsPanel = if (touchControls) {
+                    Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.displayCutout)
+                        .widthIn(max = 520.dp).fillMaxWidth().padding(12.dp)
+                        .background(DialogSurface.copy(alpha = 0.96f), RoundedCornerShape(20.dp)).padding(12.dp)
+                } else {
+                    Modifier.align(Alignment.BottomStart).padding(start = 28.dp, end = 28.dp, bottom = 20.dp)
+                        .widthIn(max = 430.dp).fillMaxWidth()
+                        .background(DialogSurface.copy(alpha = 0.96f), RoundedCornerShape(20.dp)).padding(14.dp)
+                }
                 Column(
-                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.94f)))).padding(horizontal = if (touchControls) 12.dp else 34.dp, vertical = if (touchControls) 12.dp else 24.dp),
+                    modifier = controlsPanel,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     content = {
-                        Text(text = state.selectedName.orEmpty(), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 27.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(text = state.selectedSourceName.orEmpty(), color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Row(horizontalArrangement = Arrangement.spacedBy(if (touchControls) 6.dp else 10.dp), verticalAlignment = Alignment.CenterVertically, content = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), content = {
+                                Text(text = state.selectedName.orEmpty(), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = if (touchControls) 21.sp else 23.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(text = state.selectedSourceName.orEmpty(), color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            })
+                            if (touchControls && state.line > 0) {
+                                StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine)
+                                retryLineButton()
+                            }
+                        })
+                        Row(modifier = if (touchControls) Modifier.fillMaxWidth() else Modifier, horizontalArrangement = Arrangement.spacedBy(if (touchControls) 6.dp else 8.dp), verticalAlignment = Alignment.CenterVertically, content = {
                             TvIconButton(icon = R.drawable.ic_previous, description = stringResource(R.string.previous), onClick = { viewModel.changeChannel(-1) })
                             TvIconButton(icon = if (state.playback == PlaybackStatus.PLAYING) R.drawable.ic_pause else R.drawable.ic_play, description = stringResource(if (state.playback == PlaybackStatus.PLAYING) R.string.pause else R.string.play), onClick = viewModel::togglePlayback, modifier = Modifier.focusRequester(controlFocus))
                             TvIconButton(icon = R.drawable.ic_next, description = stringResource(R.string.next), onClick = { viewModel.changeChannel(1) })
+                            if (touchControls) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                             TvIconButton(icon = if (state.selectedId in state.favoriteIds) R.drawable.ic_star_filled else R.drawable.ic_star, description = stringResource(if (state.selectedId in state.favoriteIds) R.string.favorite_remove else R.string.favorite_add), onClick = viewModel::toggleCurrentFavorite, tint = if (state.selectedId in state.favoriteIds) Gold else Color.White)
                             if (touchControls) {
                                 TvIconButton(icon = R.drawable.ic_close, description = stringResource(R.string.exit_fullscreen), onClick = viewModel::exitFullscreen)
+                            } else if (state.line > 0) {
+                                StreamLineBadge(state = state, onSwitch = viewModel::changeStreamLine)
+                                retryLineButton()
                             }
                         })
                     }
