@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -405,10 +406,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         mutableState.value = state.value.copy(playback = PlaybackStatus.LOADING, line = streamIndex + 1, lineCount = limit)
+        if (current.currentMediaItem != null) {
+            // Reset the decoder before switching between independent live streams.
+            current.stop()
+        }
         current.setMediaItem(MediaItem.fromUri(channel.streams[streamIndex]))
+        watchTimeout()
         current.prepare()
         current.playWhenReady = wantsPlayback
-        watchTimeout()
     }
 
     private fun nextLine() {
@@ -425,14 +430,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         streamIndex = if (next == firstStreamIndex) count else next
         // Defer to avoid modifying the player inside its event dispatch.
         fallback = viewModelScope.launch(block = {
+            yield()
             if (generation == expectedGeneration) {
+                fallback = null
                 playLine()
             }
         })
     }
 
     private fun watchTimeout() {
-        timeout?.cancel()
+        if (timeout?.isActive == true) {
+            return
+        }
         timeout = viewModelScope.launch(block = {
             delay(BuildConfig.STREAM_PROBE_TIMEOUT_MS.toLong())
             nextLine()

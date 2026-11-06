@@ -1,11 +1,46 @@
 package cn.hdfk7.android.iptv.core.data.network
 
+import cn.hdfk7.android.iptv.core.model.ChannelCategory
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class PlaylistParserTests {
     private val parser = PlaylistParser()
     private val base = "https://example.org/catalog/list.m3u8"
+
+    @Test
+    fun interlacedCctvLineMergesIntoItsChannel() {
+        val channel = parser.parse("""
+            #EXTM3U
+            #EXTINF:-1 group-title="其他频道",CCTV-9 (576i)
+            https://example.org/interlaced
+            #EXTINF:-1,CCTV9
+            https://example.org/other
+        """.trimIndent(), base).single()
+
+        assertEquals("CCTV9", channel.name)
+        assertEquals(ChannelCategory.CCTV, ChannelCategory.classify(channel))
+        assertEquals(2, channel.streams.size)
+    }
+
+    @Test
+    fun missingOrUnrecognizedGroupsUseExplicitClassification() {
+        val channels = parser.parse("""
+            #EXTM3U
+            #EXTINF:-1,CCTV-4K (1080p)
+            https://example.org/4k
+            #EXTINF:-1 group-title="备用频道",Local
+            https://example.org/local
+            #EXTINF:-1,湖南卫视
+            https://example.org/hunan
+            #EXTINF:-1 group-title="港澳台频道",Local HK
+            https://example.org/hk
+        """.trimIndent(), base)
+
+        assertEquals(listOf(ChannelCategory.CCTV, ChannelCategory.OTHER, ChannelCategory.SATELLITE, ChannelCategory.GREATER_CHINA),
+            channels.map(transform = ChannelCategory::classify))
+        assertEquals("备用频道", channels[1].group)
+    }
 
     @Test
     fun mergedProgramKeepsFirstNonEmptyCategory() {

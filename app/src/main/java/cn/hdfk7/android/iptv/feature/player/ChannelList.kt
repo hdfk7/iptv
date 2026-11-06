@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.core.model.Channel
+import cn.hdfk7.android.iptv.core.model.ChannelCategory
 import cn.hdfk7.android.iptv.core.model.ChannelFocusMemory
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
 import cn.hdfk7.android.iptv.core.ui.components.TvAction
@@ -112,7 +113,7 @@ fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modifier: Modi
     var listHasFocus by remember(calculation = { mutableStateOf(false) })
     var enteringList by remember(calculation = { mutableStateOf(false) })
     val selectChannel: (Channel) -> Unit = { channel ->
-        if (channel.id != state.selectedId || state.playback == PlaybackStatus.IDLE || state.playback == PlaybackStatus.ERROR) {
+        if (channel.id != state.selectedId) {
             onSelect(channel)
         }
     }
@@ -219,7 +220,11 @@ fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modifier: Modi
                                 }
                             }, onSelect = {
                                 val moveToVideo = television && channel.id == state.selectedId
-                                commitChannel(channel)
+                                if (channel.id == state.selectedId && state.playback in setOf(PlaybackStatus.IDLE, PlaybackStatus.ERROR)) {
+                                    onSelect(channel)
+                                } else {
+                                    commitChannel(channel)
+                                }
                                 onConfirmSelect?.invoke()
                                 if (moveToVideo) {
                                     videoFocus.requestFocus()
@@ -259,6 +264,15 @@ private suspend fun LazyListState.revealItem(index: Int) {
 
 @Composable
 private fun ChannelRow(channel: Channel, index: Int, television: Boolean, selected: () -> Boolean, highlighted: () -> Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: ChannelListFocus, onInitialFocus: () -> Unit, onVideoFocus: () -> Unit, onLeftToHeader: (() -> Unit)?, onFocused: () -> Unit, onSelect: () -> Unit) {
+    val categoryLabel = remember(channel, calculation = {
+        when (ChannelCategory.classify(channel)) {
+            ChannelCategory.CCTV -> R.string.channel_category_cctv
+            ChannelCategory.SATELLITE -> R.string.channel_category_satellite
+            ChannelCategory.GREATER_CHINA -> R.string.channel_category_greater_china
+            ChannelCategory.SPORTS -> R.string.channel_category_sports
+            ChannelCategory.OTHER -> R.string.channel_category_other
+        }
+    })
     val channelFocus = remember(calculation = { FocusRequester() })
     val view = LocalView.current
     val inputMode = LocalInputModeManager.current
@@ -331,7 +345,7 @@ private fun ChannelRow(channel: Channel, index: Int, television: Boolean, select
             Text(text = stringResource(R.string.channel_number, index + 1), fontSize = if (television) 12.sp else 11.sp, color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, modifier = Modifier.width(if (television) 34.dp else 28.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), content = {
                 Text(text = channel.name, color = if (focused) FocusInk else Accent, fontSize = if (television) 16.sp else 14.sp, fontWeight = if (playing || focused) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(text = if (showSource) channel.sourceName else channel.group, color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, fontSize = if (television) 12.sp else 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = if (showSource) channel.sourceName else stringResource(categoryLabel), color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, fontSize = if (television) 12.sp else 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             })
         })
     })

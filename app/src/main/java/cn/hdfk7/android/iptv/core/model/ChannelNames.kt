@@ -6,8 +6,8 @@ import java.util.Locale
 /** Conservative name identity: CCTV's common formatting variants share one program. */
 object ChannelNames {
     private val whitespace = Regex("\\s+")
-    private val resolution = Regex("[\\(\\[【](?:[0-9]{3,4}P|HD|FHD|UHD|高清|超清|标清)[\\)\\]】]")
-    private val cctv = Regex("^CCTV[-_]?([0-9]{1,2})([+]?)(?:(?:综合|财经|综艺|中文国际|体育赛事|体育|电影|国防军事|军事农业|电视剧|纪录|科教|戏曲|社会与法|新闻|少儿|音乐|农业农村|奥林匹克|高清|超清|标清|HD|FHD|UHD|[0-9]{3,4}P))*$")
+    private val resolution = Regex("[\\(\\[【](?:[0-9]{3,4}[IP]|HD|FHD|UHD|高清|超清|标清)[\\)\\]】]")
+    private val cctv = Regex("^CCTV[-_]?([0-9]{1,2})([+]?)(?:(?:综合|财经|综艺|中文国际|体育赛事|体育|电影|国防军事|军事农业|电视剧|纪录|科教|戏曲|社会与法|新闻|少儿|音乐|农业农村|奥林匹克|高清|超清|标清|HD|FHD|UHD|[0-9]{3,4}[IP]))*$")
 
     fun key(name: String): String {
         val normalized = Normalizer.normalize(name, Normalizer.Form.NFKC).uppercase(Locale.ROOT)

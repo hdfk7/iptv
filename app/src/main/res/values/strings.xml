@@ -77,4 +77,9 @@
     <string name="previous_line">上一条线路</string>
     <string name="next_line">下一条线路</string>
     <string name="retry_current_line">重连当前线路</string>
+    <string name="channel_category_cctv">央视频道</string>
+    <string name="channel_category_satellite">卫视频道</string>
+    <string name="channel_category_greater_china">港澳台频道</string>
+    <string name="channel_category_sports">体育频道</string>
+    <string name="channel_category_other">其他频道</string>
 </resources>
