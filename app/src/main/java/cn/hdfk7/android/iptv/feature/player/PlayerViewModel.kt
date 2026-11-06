@@ -253,10 +253,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     Player.STATE_BUFFERING -> {
                         mutableState.value = state.value.copy(playback = PlaybackStatus.LOADING)
-                        watchTimeout()
                     }
                     Player.STATE_READY -> {
-                        timeout?.cancel()
                         updatePlayingState()
                     }
                     Player.STATE_ENDED -> {
@@ -411,9 +409,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             current.stop()
         }
         current.setMediaItem(MediaItem.fromUri(channel.streams[streamIndex]))
-        watchTimeout()
         current.prepare()
         current.playWhenReady = wantsPlayback
+        watchLineHealth(current)
     }
 
     private fun nextLine() {
@@ -438,13 +436,43 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         })
     }
 
-    private fun watchTimeout() {
-        if (timeout?.isActive == true) {
-            return
-        }
+    private fun watchLineHealth(current: ExoPlayer) {
+        val limit = BuildConfig.STREAM_PROBE_TIMEOUT_MS.toLong()
         timeout = viewModelScope.launch(block = {
-            delay(BuildConfig.STREAM_PROBE_TIMEOUT_MS.toLong())
-            nextLine()
+            var lastSample = SystemClock.elapsedRealtime()
+            var lastRenderedFrames: Int? = null
+            var stalledMs = 0L
+            var stableMs = 0L
+            while (true) {
+                delay(minOf(1000L, limit.coerceAtLeast(1L)))
+                val now = SystemClock.elapsedRealtime()
+                val elapsed = now - lastSample
+                lastSample = now
+                val counters = current.videoDecoderCounters
+                counters?.ensureUpdated()
+                val renderedFrames = counters?.renderedOutputBufferCount
+                val videoExpected = current.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)
+                val stalled = current.playbackState == Player.STATE_BUFFERING ||
+                    (current.isPlaying && videoExpected && (renderedFrames == null || renderedFrames == lastRenderedFrames))
+                lastRenderedFrames = renderedFrames
+
+                if (!wantsPlayback) {
+                    stalledMs = 0
+                    stableMs = 0
+                } else if (stalled) {
+                    stalledMs += elapsed
+                    stableMs = 0
+                    if (stalledMs >= limit) {
+                        nextLine()
+                        return@launch
+                    }
+                } else if (current.isPlaying) {
+                    stableMs += elapsed
+                    if (stableMs >= limit) {
+                        stalledMs = 0
+                    }
+                }
+            }
         })
     }
 
