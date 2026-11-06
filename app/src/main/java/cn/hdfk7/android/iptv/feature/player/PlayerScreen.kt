@@ -17,11 +17,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.hdfk7.android.iptv.R
 import cn.hdfk7.android.iptv.app.IptvApplication
@@ -29,6 +33,7 @@ import cn.hdfk7.android.iptv.core.model.SourceLibrary
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 import cn.hdfk7.android.iptv.core.ui.theme.*
 import cn.hdfk7.android.iptv.feature.proxy.ProxySettingsDialog
+import cn.hdfk7.android.iptv.feature.update.AppUpdateDialog
 import cn.hdfk7.android.iptv.feature.source.SourceManagerDialog
 import cn.hdfk7.android.iptv.feature.source.SourceManagerViewModel
 
@@ -36,7 +41,7 @@ import cn.hdfk7.android.iptv.feature.source.SourceManagerViewModel
 fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewModel, television: Boolean) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sourceUi by sourceViewModel.state.collectAsStateWithLifecycle()
-    var proxyOpen by remember(calculation = { mutableStateOf(false) })
+    var settingsPage by remember(calculation = { mutableStateOf<SettingsPage?>(null) })
     val app = LocalContext.current.applicationContext as IptvApplication
     val firstFocus = remember(calculation = { FocusRequester() })
     val selectedRowFocus = remember(calculation = { ChannelListFocus() })
@@ -91,7 +96,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                             onSelect = viewModel::select,
                             modifier = modifier,
                             compact = !television,
-                            requestInitialFocus = television && initialChannelFocusPending && !sourceUi.open && !proxyOpen,
+                            requestInitialFocus = television && initialChannelFocusPending && !sourceUi.open && settingsPage == null,
                             onInitialFocus = { initialChannelFocusPending = false },
                             selectedRowFocus = selectedRowFocus,
                             videoFocus = videoFocus
@@ -114,7 +119,7 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                         modifier = Modifier.fillMaxSize().padding(horizontal = if (television && !narrowTv) 26.dp else 12.dp, vertical = if (television && !narrowTv) 20.dp else 8.dp),
                         verticalArrangement = Arrangement.spacedBy(if (television && !narrowTv) 16.dp else 8.dp),
                         content = {
-                            HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onProxy = { proxyOpen = true }, onRefresh = viewModel::refreshManually, compact = !television || narrowTv)
+                            HomeHeader(state = state, sourceViewModel = sourceViewModel, focusRequester = firstFocus, onSettings = { settingsPage = SettingsPage.Menu }, onRefresh = viewModel::refreshManually, compact = !television || narrowTv)
                             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                             if (stacked) {
                                 playback(Modifier.fillMaxWidth())
@@ -130,15 +135,29 @@ fun PlayerScreen(viewModel: PlayerViewModel, sourceViewModel: SourceManagerViewM
                 })
             }
             SourceManagerDialog(viewModel = sourceViewModel)
-            if (proxyOpen) {
-                ProxySettingsDialog(store = app.proxySettings, onClose = { proxyOpen = false }, onSaved = viewModel::applyProxy)
+            when (settingsPage) {
+                SettingsPage.Menu -> {
+                    HomeSettingsDialog(
+                        onClose = { settingsPage = null },
+                        onProxy = { settingsPage = SettingsPage.Proxy },
+                        onUpdate = { settingsPage = SettingsPage.Update },
+                        television = television
+                    )
+                }
+                SettingsPage.Proxy -> {
+                    ProxySettingsDialog(store = app.proxySettings, onClose = { settingsPage = SettingsPage.Menu }, onSaved = viewModel::applyProxy)
+                }
+                SettingsPage.Update -> {
+                    AppUpdateDialog(onClose = { settingsPage = SettingsPage.Menu })
+                }
+                null -> Unit
             }
         }
     )
 }
 
 @Composable
-private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onProxy: () -> Unit, onRefresh: () -> Unit, compact: Boolean) {
+private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewModel, focusRequester: FocusRequester, onSettings: () -> Unit, onRefresh: () -> Unit, compact: Boolean) {
     val favorites = state.activeSourceId == SourceLibrary.FAVORITES_ID
     val source = state.sources.firstOrNull(predicate = { entry -> entry.id == state.activeSourceId })
     Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp), content = {
@@ -152,9 +171,42 @@ private fun HomeHeader(state: PlayerState, sourceViewModel: SourceManagerViewMod
             Spacer(modifier = Modifier.weight(1f))
         }
         TvIconButton(icon = R.drawable.ic_refresh, description = stringResource(R.string.refresh), onClick = onRefresh)
-        TvIconButton(description = stringResource(R.string.proxy_title), icon = R.drawable.ic_settings, onClick = onProxy)
-        if (!compact) {
-            TvIconButton(description = stringResource(R.string.library_title), onClick = sourceViewModel::open, icon = R.drawable.ic_library)
-        }
+        TvIconButton(description = stringResource(R.string.settings_title), icon = R.drawable.ic_settings, onClick = onSettings)
+    })
+}
+
+private enum class SettingsPage { Menu, Proxy, Update }
+
+@Composable
+private fun HomeSettingsDialog(onClose: () -> Unit, onProxy: () -> Unit, onUpdate: () -> Unit, television: Boolean) {
+    val proxyFocus = remember(calculation = { FocusRequester() })
+    Dialog(onDismissRequest = onClose, content = {
+        val inputMode = LocalInputModeManager.current
+        Column(
+            modifier = Modifier.fillMaxWidth().background(DialogSurface, RoundedCornerShape(22.dp)).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = {
+                Row(verticalAlignment = Alignment.CenterVertically, content = {
+                    Text(text = stringResource(R.string.settings_title), color = Color.White, fontSize = 22.sp, modifier = Modifier.weight(1f))
+                    TvIconButton(icon = R.drawable.ic_close, description = stringResource(R.string.settings_close), onClick = onClose)
+                })
+                SettingsEntry(icon = R.drawable.ic_settings, title = stringResource(R.string.proxy_title), onClick = onProxy, modifier = Modifier.focusRequester(proxyFocus))
+                SettingsEntry(icon = R.drawable.ic_update, title = stringResource(R.string.app_update_title), onClick = onUpdate)
+                LaunchedEffect(key1 = television, block = {
+                    if (television) {
+                        inputMode.requestInputMode(InputMode.Keyboard)
+                        proxyFocus.requestFocus()
+                    }
+                })
+            }
+        )
+    })
+}
+
+@Composable
+private fun SettingsEntry(icon: Int, title: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
+        TvIconButton(icon = icon, description = title, onClick = onClick, modifier = modifier)
+        Text(text = title, color = Color.White, modifier = Modifier.clearAndSetSemantics(properties = {}))
     })
 }

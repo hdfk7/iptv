@@ -58,4 +58,20 @@
     <string name="proxy_invalid">请检查 IP、端口（1–65535）及认证信息</string>
     <string name="exit_fullscreen">退出全屏</string>
     <string name="channel_count">节目 · %1$d</string>
+    <string name="app_update_title">检查应用更新</string>
+    <string name="app_update_checking">正在检查更新…</string>
+    <string name="app_update_unconfigured">尚未配置应用更新地址。</string>
+    <string name="app_update_current">当前已是最新版本（%1$s）。</string>
+    <string name="app_update_available">发现新版本 %1$s</string>
+    <string name="app_update_failed">检查更新失败，请检查网络后重试。</string>
+    <string name="app_update_confirm_download">确认下载</string>
+    <string name="app_update_downloading">正在下载更新…</string>
+    <string name="app_update_download_failed">下载失败或安装包与版本信息不匹配，可重试。</string>
+    <string name="app_update_install">安装更新</string>
+    <string name="app_update_install_ready">更新已下载，请在系统安装界面确认。</string>
+    <string name="app_update_install_failed">无法打开系统安装界面。</string>
+    <string name="app_update_allow_install">请允许 IPTV 安装未知来源应用，然后返回继续。</string>
+    <string name="app_update_close">关闭更新窗口</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_close">关闭设置</string>
 </resources>

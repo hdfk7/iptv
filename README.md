@@ -100,7 +100,7 @@ Kotlin 使用显式参数和命名回调，无尾随 Lambda；界面单一根组
 
 ## HTTP 代理
 
-首页右上角打开“HTTP 代理”，填写 IPv4/IPv6、端口及可选用户名/密码，开启并保存。支持 HTTP 转发和 HTTPS CONNECT、Basic 代理认证，不支持 SOCKS。订阅下载、视频清单及分片均使用同一代理；保存后重连当前节目并刷新当前源。关闭后直接连接。代理故障不会静默改为直连，更新失败保留缓存。配置在本机通过 Android Keystore AES-GCM 加密保存，不备份，不输出认证信息。
+从首页右上角的设置打开“HTTP 代理”，填写 IPv4/IPv6、端口及可选用户名/密码，开启并保存。支持 HTTP 转发和 HTTPS CONNECT、Basic 代理认证，不支持 SOCKS。订阅下载、视频清单及分片均使用同一代理；保存后重连当前节目并刷新当前源。关闭后直接连接。代理故障不会静默改为直连，更新失败保留缓存。配置在本机通过 Android Keystore AES-GCM 加密保存，不备份，不输出认证信息。
 
 启动默认选中订阅源列表中的第一个源；没有普通订阅源时显示收藏源。当前运行期间仍可切换源，前后台切换不会重置选择。
 
@@ -125,3 +125,17 @@ Kotlin 使用显式参数和命名回调，无尾随 Lambda；界面单一根组
 视觉细调保留现有布局与按钮尺寸：石墨背景搭配低饱和蓝灰面板，白色焦点与深色前景；播放/暂停/切台采用实心图标，工具采用统一圆头线条，收藏使用实心星标与暖金色区分。
 
 播放器界面按职责分为 PlayerScreen（页面组合）、ChannelList（节目列表与焦点恢复）、PlaybackPanel（预览与控制）、FullscreenPlayer（全屏交互）。播放、恢复和全屏入口共用 setPlayback；不额外引入通用框架或控制器层。移除旧全屏/代理图标和不再使用的文案；不再依赖 WorkManager，仅由系统 JobScheduler 清理旧后台任务。
+
+## 手动检查应用更新
+
+手机和电视都可从首页的设置图标进入“检查应用更新”，刷新图标仍用于更新节目列表。更新检查只请求一个 HTTPS 接口，该接口返回以下格式的 JSON。
+
+```json
+{"versionCode": 6, "versionName": "1.2.2", "apkUrl": "IPTV-release-v1.2.2-20261106150000.apk"}
+```
+
+运行 `./gradlew :app:assembleRelease` 会自动从打包结果生成 `app/build/outputs/update/release/latest.json`。先上传同次构建的 Release APK，再上传 JSON 到同一个 HTTPS 目录。生成的 `apkUrl` 是实际 APK 文件名，应用以接口地址为基准解析，也接受完整 HTTPS 下载地址。Debug 构建有独立的 `outputs/update/debug/latest.json`。
+
+打包时用 `-PAPP_UPDATE_MANIFEST_URL=https://example.com/iptv/latest.json` 指定接口，或将同名属性放入本机 Gradle 配置。未配置时，点击检查会显示提示。每次发布递增 APK 的 `versionCode`，保持发行签名一致。
+
+应用按 `versionCode` 比较，确认后下载到私有缓存，校验包名和版本，再打开系统安装界面。首次安装可能需要允许 IPTV 安装未知来源应用，授权返回后继续。

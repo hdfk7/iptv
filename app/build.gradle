@@ -1,3 +1,6 @@
+import com.android.build.api.artifact.SingleArtifact
+import groovy.json.JsonOutput
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
@@ -25,8 +28,10 @@ android {
         applicationId = 'cn.hdfk7.android.iptv'
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = '1.2.1'
+        versionCode = 6
+        versionName = '1.2.2'
+        def updateManifestUrl = providers.gradleProperty("APP_UPDATE_MANIFEST_URL").getOrElse("")
+        buildConfigField "String", "APP_UPDATE_MANIFEST_URL", JsonOutput.toJson(updateManifestUrl)
         buildConfigField "boolean", "APP_DEBUG_SWITCH", APP_DEBUG_SWITCH
         buildConfigField "int", "STREAM_CONNECT_TIMEOUT_MS", providers.gradleProperty("STREAM_CONNECT_TIMEOUT_MS").getOrElse("5000")
         buildConfigField "int", "STREAM_READ_TIMEOUT_MS", providers.gradleProperty("STREAM_READ_TIMEOUT_MS").getOrElse("5000")
@@ -73,6 +78,31 @@ androidComponents {
         variant.outputs.each { output ->
             def date = new Date().format('yyyyMMddHHmmss')
             output.outputFileName.set("${APP_DISPLAY_NAME}-${variant.buildType}-v${output.versionName.get()}-${date}.apk")
+        }
+        def variantName = variant.name.capitalize()
+        def apkDirectory = variant.artifacts.get(SingleArtifact.APK.INSTANCE)
+        def loader = variant.artifacts.getBuiltArtifactsLoader()
+        def manifestFile = layout.buildDirectory.file("outputs/update/${variant.name}/latest.json")
+        def manifestTask = tasks.register("generate${variantName}UpdateManifest") {
+            inputs.dir(apkDirectory)
+            outputs.file(manifestFile)
+            doLast {
+                def artifacts = loader.load(apkDirectory.get())
+                if (artifacts == null || artifacts.elements.size() != 1) {
+                    throw new GradleException("Expected one APK for the update manifest")
+                }
+                def apk = artifacts.elements.first()
+                def target = manifestFile.get().asFile
+                target.parentFile.mkdirs()
+                target.setText(JsonOutput.prettyPrint(JsonOutput.toJson([
+                    versionCode: apk.versionCode,
+                    versionName: apk.versionName,
+                    apkUrl: new File(apk.outputFile).name
+                ])) + System.lineSeparator(), "UTF-8")
+            }
+        }
+        tasks.matching { it.name == "assemble${variantName}" }.configureEach {
+            dependsOn(manifestTask)
         }
     }
 }
