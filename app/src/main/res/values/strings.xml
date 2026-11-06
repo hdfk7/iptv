@@ -66,7 +66,10 @@
     <string name="app_update_downloading">正在下载更新…</string>
     <string name="app_update_progress">已下载 %1$s / %2$s（%3$d%%）</string>
     <string name="app_update_progress_size">已下载 %1$s</string>
-    <string name="app_update_download_failed">下载失败或安装包与版本信息不匹配，可重试。</string>
+    <string name="app_update_download_failed">下载未完成，请检查网络和剩余存储空间后重试。</string>
+    <string name="app_update_archive_unreadable">下载完成，但系统无法读取安装包。</string>
+    <string name="app_update_archive_mismatch">下载完成，但安装包与当前应用或更新版本不匹配。</string>
+    <string name="app_update_save_failed">无法保存安装包，请检查设备剩余存储空间。</string>
     <string name="app_update_install">安装更新</string>
     <string name="app_update_install_ready">更新已下载，请在系统安装界面确认。</string>
     <string name="app_update_install_failed">无法打开系统安装界面。</string>

@@ -1,6 +1,7 @@
 package cn.hdfk7.android.iptv.feature.update
 
 import android.content.Context
+import cn.hdfk7.android.iptv.R
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -16,6 +17,8 @@ import okhttp3.Response
 
 private val progressInterval = TimeUnit.MILLISECONDS.toNanos(120)
 private val updateClient = OkHttpClient.Builder().followSslRedirects(false).readTimeout(3, TimeUnit.MINUTES).build()
+
+internal class AppUpdateDownloadException(val messageRes: Int) : IOException()
 
 internal data class AppDownloadProgress(val downloaded: Long, val total: Long) {
     val fraction: Float?
@@ -62,22 +65,33 @@ internal suspend fun downloadApk(context: Context, release: AppRelease, onProgre
                         check(reply.isSuccessful)
                         val body = checkNotNull(reply.body)
                         val directory = File(context.cacheDir, "updates")
-                        check(directory.isDirectory || directory.mkdirs())
-                        val pending = File.createTempFile("iptv-", ".apk", directory)
+                        if (!directory.isDirectory && !directory.mkdirs()) {
+                            throw AppUpdateDownloadException(R.string.app_update_save_failed)
+                        }
+                        val pending = try {
+                            File.createTempFile("iptv-", ".apk", directory)
+                        } catch (_: IOException) {
+                            throw AppUpdateDownloadException(R.string.app_update_save_failed)
+                        }
                         try {
                             body.byteStream().use(block = { input ->
                                 pending.outputStream().use(block = { output ->
                                     copyUpdateBody(input, output, body.contentLength(), isActive = { continuation.isActive }, onProgress = onProgress)
                                 })
                             })
-                            val archive = checkNotNull(context.packageManager.getPackageArchiveInfo(pending.path, 0))
+                            val archive = context.packageManager.getPackageArchiveInfo(pending.path, 0)
+                                ?: throw AppUpdateDownloadException(R.string.app_update_archive_unreadable)
                             @Suppress("DEPRECATION")
-                            check(archive.packageName == context.packageName && archive.versionCode == release.versionCode)
+                            if (archive.packageName != context.packageName || archive.versionCode != release.versionCode) {
+                                throw AppUpdateDownloadException(R.string.app_update_archive_mismatch)
+                            }
                             if (!continuation.isActive) {
                                 throw CancellationException("Update download cancelled")
                             }
                             val apk = File(directory, "iptv-update.apk")
-                            check(pending.renameTo(apk))
+                            if (!pending.renameTo(apk)) {
+                                throw AppUpdateDownloadException(R.string.app_update_save_failed)
+                            }
                             apk
                         } finally {
                             pending.delete()

@@ -175,6 +175,8 @@ fun AppUpdateDialog(onClose: () -> Unit) {
                                             requestInstall(file)
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
+                                        } catch (failure: AppUpdateDownloadException) {
+                                            actionMessage = failure.messageRes
                                         } catch (_: Exception) {
                                             actionMessage = R.string.app_update_download_failed
                                         } finally {
