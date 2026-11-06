@@ -27,6 +27,7 @@ import cn.hdfk7.android.iptv.core.model.SourceLibrary
 import cn.hdfk7.android.iptv.core.model.LibraryException
 import cn.hdfk7.android.iptv.core.data.repository.RefreshEngine
 import cn.hdfk7.android.iptv.core.model.Channel
+import cn.hdfk7.android.iptv.core.model.LineQuality
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -56,7 +57,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var activeChannel: Channel? = null
     private var streamIndex = 0
-    private var firstStreamIndex = 0
+    private val lineRanking = PlaybackLineRanking()
+    private val attemptedLines = mutableSetOf<String>()
+    private var rankingSnapshot: Long? = null
     private var wantsPlayback = false
     private var timeout: Job? = null
     private var fallback: Job? = null
@@ -84,8 +87,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 val playing = activeChannel
                 val current = catalog.channels.firstOrNull(predicate = { channel -> channel.id == playing?.id })
+                val refreshed = catalog.updatedAt != rankingSnapshot
+                if (refreshed) {
+                    lineRanking.reset()
+                    rankingSnapshot = catalog.updatedAt
+                }
                 if (playing != null && current != null) {
                     activeChannel = playing.copy(name = current.name, sourceName = current.sourceName)
+                    if (refreshed || playing.streams.toSet() != current.streams.toSet()) {
+                        val playingUrl = playing.streams.getOrNull(streamIndex)
+                        activeChannel = current
+                        attemptedLines.clear()
+                        if (playingUrl != null && playingUrl in current.streams) {
+                            streamIndex = current.streams.indexOf(playingUrl)
+                            publishLineRanking()
+                            player?.let(block = { currentPlayer ->
+                                timeout?.cancel()
+                                watchLineHealth(currentPlayer)
+                            })
+                        } else {
+                            select(current)
+                        }
+                    }
                 }
                 val snapshot = catalog.updatedAt
                 val favorites = catalog.library.favorites
@@ -215,7 +238,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         wantsPlayback = false
         player?.stop()
         player?.clearMediaItems()
-        mutableState.value = state.value.copy(playback = PlaybackStatus.IDLE, line = 0, lineCount = 0)
+        mutableState.value = state.value.copy(playback = PlaybackStatus.IDLE, line = 0, lineCount = 0, lines = emptyList())
     }
 
     private fun clearSelection() {
@@ -297,7 +320,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun select(channel: Channel) {
-        selectLine(channel, 0)
+        val sorted = lineRanking.lines(channel.id, channel.streams)
+        selectLine(channel.copy(streams = sorted.map(transform = { line -> line.url })), 0)
     }
 
     private fun selectLine(channel: Channel, index: Int) {
@@ -306,7 +330,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         timeout?.cancel()
         activeChannel = channel
         streamIndex = index
-        firstStreamIndex = index
+        attemptedLines.clear()
         wantsPlayback = true
         mutableState.value = state.value.copy(selectedId = channel.id, selectedName = channel.name, selectedSourceName = channel.sourceName)
         playLine()
@@ -394,6 +418,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun playLine() {
+        publishLineRanking()
         val channel = activeChannel ?: return
         val current = player ?: return
         timeout?.cancel()
@@ -403,7 +428,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             mutableState.value = state.value.copy(playback = PlaybackStatus.ERROR)
             return
         }
-        mutableState.value = state.value.copy(playback = PlaybackStatus.LOADING, line = streamIndex + 1, lineCount = limit)
+        mutableState.value = state.value.copy(playback = PlaybackStatus.LOADING)
         if (current.currentMediaItem != null) {
             // Reset the decoder before switching between independent live streams.
             current.stop()
@@ -424,8 +449,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (count == 0 || streamIndex >= count) {
             return
         }
-        val next = (streamIndex + 1) % count
-        streamIndex = if (next == firstStreamIndex) count else next
+        val channel = activeChannel ?: return
+        val url = channel.streams[streamIndex]
+        attemptedLines.add(url)
+        lineRanking.failed(channel.id, url)
+        publishLineRanking()
+        val next = activeChannel?.streams?.indexOfFirst(predicate = { candidate -> candidate !in attemptedLines }) ?: -1
+        streamIndex = if (next < 0) count else next
         // Defer to avoid modifying the player inside its event dispatch.
         fallback = viewModelScope.launch(block = {
             yield()
@@ -438,8 +468,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun watchLineHealth(current: ExoPlayer) {
         val limit = BuildConfig.STREAM_PROBE_TIMEOUT_MS.toLong()
+        val channel = activeChannel ?: return
+        val url = channel.streams.getOrNull(streamIndex) ?: return
         timeout = viewModelScope.launch(block = {
-            var lastSample = SystemClock.elapsedRealtime()
+            val startedAt = SystemClock.elapsedRealtime()
+            var lastSample = startedAt
+            var startupMs = 0L
+            var playedMs = 0L
+            val observation = LineObservationWindow()
+            var bufferingMs = 0L
             var lastRenderedFrames: Int? = null
             var stalledMs = 0L
             var stableMs = 0L
@@ -455,6 +492,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val stalled = current.playbackState == Player.STATE_BUFFERING ||
                     (current.isPlaying && videoExpected && (renderedFrames == null || renderedFrames == lastRenderedFrames))
                 lastRenderedFrames = renderedFrames
+
+                if (wantsPlayback) {
+                    if (current.isPlaying && !stalled && (!videoExpected || (renderedFrames ?: 0) > 0)) {
+                        if (startupMs == 0L) {
+                            startupMs = now - startedAt
+                        }
+                        playedMs += elapsed
+                    } else if (stalled && startupMs > 0L) {
+                        bufferingMs += elapsed
+                    }
+                }
 
                 if (!wantsPlayback) {
                     stalledMs = 0
@@ -472,8 +520,37 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         stalledMs = 0
                     }
                 }
+                if (observation.advance(elapsed, hasStarted = startupMs > 0L,
+                    paused = !wantsPlayback || (!current.isPlaying && !stalled))) {
+                    val format = current.videoFormat
+                    val size = current.videoSize
+                    lineRanking.record(channel.id, url, LineQuality(
+                        width = if (size.width > 0) size.width else (format?.width ?: 0).coerceAtLeast(0),
+                        height = if (size.height > 0) size.height else (format?.height ?: 0).coerceAtLeast(0),
+                        frameRate = (format?.frameRate ?: 0f).coerceAtLeast(0f),
+                        startupMs = startupMs,
+                        playedMs = playedMs,
+                        stalledMs = bufferingMs,
+                        renderedFrames = renderedFrames ?: 0,
+                        droppedFrames = counters?.droppedBufferCount ?: 0
+                    ))
+                    publishLineRanking()
+                }
             }
         })
+    }
+
+    private fun publishLineRanking(): Unit {
+        val channel = activeChannel ?: return
+        val url = channel.streams.getOrNull(streamIndex)
+        val order = lineRanking.order(channel.id, channel.streams, url)
+        val lines = order.lines
+        activeChannel = channel.copy(streams = lines.map(transform = { line -> line.url }))
+        val index = order.playingIndex
+        if (index >= 0) {
+            streamIndex = index
+        }
+        mutableState.value = state.value.copy(lines = lines, line = if (index >= 0) index + 1 else 0, lineCount = lines.size)
     }
 
     private fun updatePlayingState() {

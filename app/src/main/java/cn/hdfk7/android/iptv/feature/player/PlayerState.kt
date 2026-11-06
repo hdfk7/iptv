@@ -3,6 +3,7 @@ package cn.hdfk7.android.iptv.feature.player
 import cn.hdfk7.android.iptv.core.model.Channel
 import cn.hdfk7.android.iptv.core.model.PlaylistSource
 import cn.hdfk7.android.iptv.core.model.SourceLibrary
+import cn.hdfk7.android.iptv.core.model.PlaybackLine
 
 enum class PlaybackStatus { IDLE, LOADING, PLAYING, PAUSED, ERROR }
 
@@ -21,6 +22,7 @@ data class PlayerState(
     val playback: PlaybackStatus = PlaybackStatus.IDLE,
     val line: Int = 0,
     val lineCount: Int = 0,
+    val lines: List<PlaybackLine> = emptyList(),
     val fixedVolume: Boolean = false,
     val fullscreen: Boolean = false,
     val infoVisible: Boolean = false,
