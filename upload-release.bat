@@ -3,9 +3,8 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 rem Build the release APK and upload it with latest.json to the site directory.
 rem Usage:
-rem   upload-release.bat              build + upload
+rem   upload-release.bat              build + upload (also removes older APKs on the server)
 rem   upload-release.bat -skipbuild   upload existing artifacts only
-rem   upload-release.bat -prune       remove older APKs on the server
 
 set "TARGET=%IPTV_DEPLOY_TARGET%"
 if "%TARGET%"=="" set "TARGET=root@bastion"
@@ -15,10 +14,8 @@ set "PUBLIC_BASE=%IPTV_PUBLIC_BASE%"
 if "%PUBLIC_BASE%"=="" set "PUBLIC_BASE=https://www.hdfk7.cn/static/iptv"
 
 set "SKIP_BUILD=0"
-set "PRUNE=0"
 for %%a in (%*) do (
     if /i "%%~a"=="-skipbuild" set "SKIP_BUILD=1"
-    if /i "%%~a"=="-prune" set "PRUNE=1"
 )
 
 cd /d "%~dp0"
@@ -85,10 +82,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if "%PRUNE%"=="1" (
-    echo -- prune older APKs
-    ssh -o BatchMode=yes "%TARGET%" "cd '%REMOTE_DIR%' ; ls IPTV-release-*.apk 2>/dev/null | grep -v '%APK_NAME%' | xargs -r rm -f"
-)
+echo -- remove older APKs
+ssh -o BatchMode=yes "%TARGET%" "cd '%REMOTE_DIR%' ; ls IPTV-release-*.apk 2>/dev/null | grep -v '%APK_NAME%' | xargs -r rm -f"
 
 echo -- files on server
 ssh -o BatchMode=yes "%TARGET%" "ls -lh '%REMOTE_DIR%/%APK_NAME%' '%REMOTE_DIR%/latest.json'"

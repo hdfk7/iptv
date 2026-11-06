@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # 构建 release 包，并把 APK 与 latest.json 上传到站点目录。
 # 用法：
-#   ./upload-release.sh              # 构建 + 上传
+#   ./upload-release.sh              # 构建 + 上传（并删除服务器上其它版本的 APK）
 #   ./upload-release.sh --skip-build # 只上传已有产物
-#   ./upload-release.sh --prune      # 上传后删掉服务器上其它版本的 APK
 set -euo pipefail
 
 SERVER="${IPTV_DEPLOY_TARGET:-root@bastion}"
@@ -14,11 +13,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 SKIP_BUILD=0
-PRUNE=0
 for arg in "$@"; do
     case "$arg" in
         --skip-build) SKIP_BUILD=1 ;;
-        --prune) PRUNE=1 ;;
+        --prune) ;;
         *) echo "未知参数: $arg" >&2; exit 1 ;;
     esac
 done
@@ -56,10 +54,8 @@ echo "==> 目标: $SERVER:$REMOTE_DIR"
 
 scp -o BatchMode=yes "$APK" "$MANIFEST" "$SERVER:$REMOTE_DIR/"
 
-if [ "$PRUNE" -eq 1 ]; then
-    echo "==> 清理旧版本 APK"
-    ssh -o BatchMode=yes "$SERVER" "cd '$REMOTE_DIR' && ls IPTV-release-*.apk 2>/dev/null | grep -v '$APK_NAME' | xargs -r rm -f"
-fi
+echo "==> 清理其它版本 APK"
+ssh -o BatchMode=yes "$SERVER" "cd '$REMOTE_DIR' && ls IPTV-release-*.apk 2>/dev/null | grep -v '$APK_NAME' | xargs -r rm -f"
 
 echo "==> 服务器上的文件"
 ssh -o BatchMode=yes "$SERVER" "ls -lh '$REMOTE_DIR/$APK_NAME' '$REMOTE_DIR/latest.json'"
