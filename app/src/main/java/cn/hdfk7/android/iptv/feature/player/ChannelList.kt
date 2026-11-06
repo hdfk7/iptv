@@ -191,7 +191,7 @@ internal fun ChannelPanel(state: PlayerState, onSelect: (Channel) -> Unit, modif
                         true
                     }), verticalArrangement = Arrangement.spacedBy(6.dp), content = {
                         itemsIndexed(items = state.channels, key = { _, channel -> channel.id }, itemContent = { index, channel ->
-                            ChannelRow(channel = channel, index = index, selected = { focusedIndex < 0 && !listHasFocus && channel.id == state.selectedId }, highlighted = { focusedIndex == index }, showSource = favorites, requestFocus = requestInitialFocus && index == 0, selectedRowFocus = selectedRowFocus, onInitialFocus = onInitialFocus, onVideoFocus = { commitChannel(channel); videoFocus.requestFocus() }, onFocused = {
+                            ChannelRow(channel = channel, index = index, television = television, selected = { focusedIndex < 0 && !listHasFocus && channel.id == state.selectedId }, highlighted = { focusedIndex == index }, showSource = favorites, requestFocus = requestInitialFocus && index == 0, selectedRowFocus = selectedRowFocus, onInitialFocus = onInitialFocus, onVideoFocus = { commitChannel(channel); videoFocus.requestFocus() }, onFocused = {
                                 focusedIndex = index
                                 if (enteringList) {
                                     enteringList = false
@@ -244,7 +244,7 @@ private suspend fun LazyListState.revealItem(index: Int) {
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, index: Int, selected: () -> Boolean, highlighted: () -> Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: ChannelListFocus, onInitialFocus: () -> Unit, onVideoFocus: () -> Unit, onFocused: () -> Unit, onSelect: () -> Unit) {
+private fun ChannelRow(channel: Channel, index: Int, television: Boolean, selected: () -> Boolean, highlighted: () -> Boolean, showSource: Boolean, requestFocus: Boolean, selectedRowFocus: ChannelListFocus, onInitialFocus: () -> Unit, onVideoFocus: () -> Unit, onFocused: () -> Unit, onSelect: () -> Unit) {
     val channelFocus = remember(calculation = { FocusRequester() })
     val view = LocalView.current
     val inputMode = LocalInputModeManager.current
@@ -309,10 +309,10 @@ private fun ChannelRow(channel: Channel, index: Int, selected: () -> Boolean, hi
         }), onClick = onSelect, containerColor = Color.Transparent, focusHighlight = false, content = {
             val focused = highlighted()
             val playing = selected()
-            Text(text = stringResource(R.string.channel_number, index + 1), fontSize = 11.sp, color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, modifier = Modifier.width(28.dp))
+            Text(text = stringResource(R.string.channel_number, index + 1), fontSize = if (television) 12.sp else 11.sp, color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, modifier = Modifier.width(if (television) 34.dp else 28.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp), content = {
-                Text(text = channel.name, color = if (focused) FocusInk else Accent, fontSize = 14.sp, fontWeight = if (playing || focused) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(text = if (showSource) channel.sourceName else channel.group, color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = channel.name, color = if (focused) FocusInk else Accent, fontSize = if (television) 16.sp else 14.sp, fontWeight = if (playing || focused) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = if (showSource) channel.sourceName else channel.group, color = if (focused) FocusInk.copy(alpha = 0.65f) else if (playing) Accent else Muted, fontSize = if (television) 12.sp else 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             })
         })
     })

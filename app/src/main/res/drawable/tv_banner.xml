@@ -7,13 +7,13 @@
                 android:startColor="#248CF6" android:endColor="#183DB3" />
         </aapt:attr>
     </path>
-    <group android:scaleX="1.32" android:scaleY="1.32" android:translateX="13" android:translateY="18.72">
+    <group android:scaleX="1.32" android:scaleY="1.32" android:translateX="9" android:translateY="18.72">
         <path android:pathData="M30,35H78Q85,35 85,42V66Q85,73 78,73H30Q23,73 23,66V42Q23,35 30,35Z"
             android:fillColor="#1AFFFFFF" android:strokeColor="#9AD5FF" android:strokeWidth="1.6" />
         <path android:fillColor="#FFFFFF"
             android:pathData="M50,41.8L65.5,51.6Q69.1,54 65.5,56.4L50,66.2Q45,69.1 45,63.4V44.6Q45,38.9 50,41.8Z" />
     </group>
-    <group android:scaleX="0.86" android:scaleY="0.86" android:translateX="4" android:translateY="14.32">
+    <group android:scaleX="0.86" android:scaleY="0.86" android:translateX="8" android:translateY="14.32">
         <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
             android:pathData="M149,64h9v48h-9z M168,64h19q17,0 17,16q0,16 -17,16h-10v16h-9z M177,73v14h10q8,0 8,-7q0,-7 -8,-7z M210,64h37v9h-14v39h-9V73h-14z M252,64h10l12,34l12,-34h10l-18,48h-9z" />
     </group>
