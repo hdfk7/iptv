@@ -2,10 +2,10 @@ package cn.hdfk7.android.iptv.feature.update
 
 import android.content.Context
 import android.provider.Settings
+import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,21 +40,19 @@ import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
 import cn.hdfk7.android.iptv.core.ui.theme.Accent
 import cn.hdfk7.android.iptv.core.ui.theme.DialogSurface
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
-import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 
 class AppUpdateFileProvider : FileProvider()
 
-private data class AppRelease(val versionCode: Int, val versionName: String, val downloadUrl: String)
+internal data class AppRelease(val versionCode: Int, val versionName: String, val downloadUrl: String)
 
 private fun readAppRelease(address: String): AppRelease {
     val manifestUrl = address.toHttpUrl()
@@ -64,43 +64,6 @@ private fun readAppRelease(address: String): AppRelease {
     require(versionCode > 0 && versionName.isNotBlank() && downloadUrl.isHttps && downloadUrl != manifestUrl)
     return AppRelease(versionCode, versionName, downloadUrl.toString())
 }
-
-private suspend fun downloadApk(context: Context, release: AppRelease): File = withContext(context = Dispatchers.IO, block = {
-    val directory = File(context.cacheDir, "updates")
-    check(directory.isDirectory || directory.mkdirs())
-    val pending = File.createTempFile("iptv-", ".apk", directory)
-    try {
-        val client = OkHttpClient.Builder().followSslRedirects(false).build()
-        try {
-            client.newCall(Request.Builder().url(release.downloadUrl).build()).execute().use(block = { response ->
-                check(response.isSuccessful)
-                val body = checkNotNull(response.body)
-                body.byteStream().use(block = { input ->
-                    pending.outputStream().use(block = { output ->
-                        val buffer = ByteArray(8192)
-                        var count = input.read(buffer)
-                        while (count != -1) {
-                            coroutineContext.ensureActive()
-                            output.write(buffer, 0, count)
-                            count = input.read(buffer)
-                        }
-                    })
-                })
-            })
-        } finally {
-            client.connectionPool.evictAll()
-        }
-        val archive = checkNotNull(context.packageManager.getPackageArchiveInfo(pending.path, 0))
-        @Suppress("DEPRECATION")
-        check(archive.packageName == context.packageName && archive.versionCode == release.versionCode)
-        coroutineContext.ensureActive()
-        val apk = File(directory, "iptv-update.apk")
-        check(pending.renameTo(apk))
-        apk
-    } finally {
-        pending.delete()
-    }
-})
 
 private fun openInstaller(context: Context, apk: File) {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", apk)
@@ -117,6 +80,8 @@ fun AppUpdateDialog(onClose: () -> Unit) {
     var result by remember(calculation = { mutableStateOf<Result<AppRelease>?>(null) })
     val scope = rememberCoroutineScope()
     var downloading by remember(calculation = { mutableStateOf(false) })
+    val downloadProgress = remember(calculation = { MutableStateFlow<AppDownloadProgress?>(null) })
+    val progress by downloadProgress.collectAsState()
     var downloadedApk by remember(calculation = { mutableStateOf<File?>(null) })
     var actionMessage by remember(calculation = { mutableStateOf<Int?>(null) })
     val install: (File) -> Unit = { apk ->
@@ -141,7 +106,7 @@ fun AppUpdateDialog(onClose: () -> Unit) {
         } else {
             actionMessage = R.string.app_update_allow_install
             try {
-                permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
+                permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()))
             } catch (_: RuntimeException) {
                 actionMessage = R.string.app_update_install_failed
             }
@@ -154,7 +119,11 @@ fun AppUpdateDialog(onClose: () -> Unit) {
     })
     val latest = result?.getOrNull()
     val update = latest?.takeIf(predicate = { release -> release.versionCode > BuildConfig.VERSION_CODE })
+    val current = progress
+    val fraction = current?.fraction
     val message = when {
+        downloading && current != null && fraction != null -> stringResource(R.string.app_update_progress, Formatter.formatFileSize(context, current.downloaded), Formatter.formatFileSize(context, current.total), (fraction * 100).toInt())
+        downloading && current != null -> stringResource(R.string.app_update_progress_size, Formatter.formatFileSize(context, current.downloaded))
         downloading -> stringResource(R.string.app_update_downloading)
         actionMessage != null -> stringResource(checkNotNull(actionMessage))
         address.isBlank() -> stringResource(R.string.app_update_unconfigured)
@@ -171,6 +140,13 @@ fun AppUpdateDialog(onClose: () -> Unit) {
             content = {
                 Text(text = stringResource(R.string.app_update_title), color = Color.White, fontSize = 22.sp)
                 Text(text = message, color = Accent, fontSize = 15.sp)
+                if (downloading) {
+                    if (fraction == null) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), content = {
                     TvIconButton(
                         icon = R.drawable.ic_close,
@@ -189,9 +165,12 @@ fun AppUpdateDialog(onClose: () -> Unit) {
                                 } else {
                                     downloading = true
                                     actionMessage = null
+                                    downloadProgress.value = null
                                     scope.launch(block = {
                                         try {
-                                            val file = downloadApk(context, update)
+                                            val file = downloadApk(context.applicationContext, update, onProgress = { status ->
+                                                downloadProgress.value = status
+                                            })
                                             downloadedApk = file
                                             requestInstall(file)
                                         } catch (cancelled: CancellationException) {

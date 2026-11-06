@@ -67,9 +67,9 @@ STREAM_PROBE_TIMEOUT_MS=8000
 
 ## 自动更新和缓存
 
-进入前台自动刷新，也可手动更新。没有每日定时任务；升级时使用系统 JobScheduler 清理旧版后台任务，已移除 WorkManager 依赖。更新失败保留缓存和收藏。
+进入前台自动刷新，也可手动更新。没有每日定时任务。更新失败保留缓存和收藏。
 
-按地址哈希独立缓存，切源先显示相应缓存。旧源延迟响应不覆盖当前源，修改 URL 不混用旧地址缓存。旧版 playlist.json 可迁移到首个内置源。有效非空列表原子写入成功后才更新时间，网络、格式、空列表和写盘失败保留旧缓存。
+按地址哈希独立缓存，切源先显示相应缓存。旧源延迟响应不覆盖当前源，修改 URL 不混用旧地址缓存。有效非空列表原子写入成功后才更新时间，网络、格式、空列表和写盘失败保留旧缓存。
 
 列表下载连接/读取各 15 秒、4 MiB 上限，不跟随入口重定向。仅支持 HTTP(S) 播放，拒绝用户名密码 URL。公共流含 HTTP，因此允许明文流量。不执行认证、Cookie、Referer 或解密指令，只使用用户显式配置的 HTTP 代理。EPG/台标属性不影响解析，本版不加载远程台标或节目单。
 
@@ -124,14 +124,14 @@ Kotlin 使用显式参数和命名回调，无尾随 Lambda；界面单一根组
 
 视觉细调保留现有布局与按钮尺寸：石墨背景搭配低饱和蓝灰面板，白色焦点与深色前景；播放/暂停/切台采用实心图标，工具采用统一圆头线条，收藏使用实心星标与暖金色区分。
 
-播放器界面按职责分为 PlayerScreen（页面组合）、ChannelList（节目列表与焦点恢复）、PlaybackPanel（预览与控制）、FullscreenPlayer（全屏交互）。播放、恢复和全屏入口共用 setPlayback；不额外引入通用框架或控制器层。移除旧全屏/代理图标和不再使用的文案；不再依赖 WorkManager，仅由系统 JobScheduler 清理旧后台任务。
+播放器界面按职责分为 PlayerScreen（页面组合）、ChannelList（节目列表与焦点恢复）、PlaybackPanel（预览与控制）、FullscreenPlayer（全屏交互）。播放、恢复和全屏入口共用 setPlayback；不额外引入通用框架或控制器层。移除旧全屏/代理图标和不再使用的文案；节目单在进入前台或手动操作时刷新。
 
 ## 手动检查应用更新
 
 手机和电视都可从首页的设置图标进入“检查应用更新”，刷新图标仍用于更新节目列表。更新检查只请求一个 HTTPS 接口，该接口返回以下格式的 JSON。
 
 ```json
-{"versionCode": 10, "versionName": "1.2.6", "apkUrl": "IPTV-release-v1.2.6-20261106150000.apk"}
+{"versionCode": 11, "versionName": "1.2.7", "apkUrl": "IPTV-release-v1.2.7-20261106150000.apk"}
 ```
 
 运行 `./gradlew :app:assembleRelease` 会自动从打包结果生成 `app/build/outputs/update/release/latest.json`。先上传同次构建的 Release APK，再上传 JSON 到同一个 HTTPS 目录。生成的 `apkUrl` 是实际 APK 文件名，应用以接口地址为基准解析，也接受完整 HTTPS 下载地址。Debug 构建有独立的 `outputs/update/debug/latest.json`。

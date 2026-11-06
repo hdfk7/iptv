@@ -39,15 +39,7 @@ class PlaylistRepository(
         { source ->
             val digest = MessageDigest.getInstance("SHA-256").digest(source.url.toByteArray())
             val hash = digest.joinToString(separator = "", transform = { byte -> "%02x".format(byte) })
-            val store = FilePlaylistStore(directory, "playlist-$hash.json")
-            // Migrate the original single-source cache without bundling stream addresses.
-            if (source.url == LibraryRules.DEFAULT_URL && store.read() == null) {
-                val legacy = FilePlaylistStore(directory).read()
-                if (legacy != null) {
-                    store.write(legacy)
-                }
-            }
-            store
+            FilePlaylistStore(directory, "playlist-$hash.json")
         },
         downloader::download,
         System::currentTimeMillis
@@ -195,7 +187,7 @@ class PlaylistRepository(
         }
         try {
             val stored = libraryStore.read()
-            val saved = LibraryRules.appendNewDefaults(LibraryRules.shortenDefaultNames(stored ?: LibraryRules.defaults()))
+            val saved = stored ?: LibraryRules.defaults()
             library = saved.copy(activeSourceId = saved.sources.firstOrNull()?.id ?: SourceLibrary.FAVORITES_ID)
             if (stored == null || library != stored) {
                 libraryStore.write(library)

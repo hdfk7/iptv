@@ -22,39 +22,9 @@ object LibraryRules {
         return SourceLibrary(sources, sources.first().id)
     }
 
-    fun shortenDefaultNames(library: SourceLibrary): SourceLibrary {
-        val renamed = library.sources.map(transform = { source ->
-            when {
-                source.id == "best-fan" && source.url == DEFAULT_URL && source.name in listOf("best-fan · 每日精选", "精选", "01 精选") -> source.copy(name = "国内精选")
-                source.id == "myiptv" && source.url == MYIPTV_URL && source.name in listOf("myIPTV · IPv4", "综合", "02 综合") -> source.copy(name = "综合频道")
-                source.id == "iptv-org" && source.url == IPTV_ORG_URL && source.name in listOf("iptv-org", "03 iptv-org") -> source.copy(name = "全球频道")
-                else -> source
-            }
-        })
-        val names = renamed.associateBy(keySelector = { source -> source.id })
-        return library.copy(sources = renamed, favorites = library.favorites.map(transform = { channel ->
-            val old = library.sources.firstOrNull(predicate = { source -> source.id == channel.sourceId })
-            val updated = names[channel.sourceId]
-            if (old != null && updated != null && old.name != updated.name && channel.sourceName == old.name) {
-                channel.copy(sourceName = updated.name)
-            } else {
-                channel
-            }
-        }))
-    }
-
     fun restoreDefaults(library: SourceLibrary): SourceLibrary {
         val sources = defaults().sources
         return library.copy(sources = sources, activeSourceId = sources.first().id)
-    }
-
-    fun appendNewDefaults(library: SourceLibrary): SourceLibrary {
-        val stock = listOf("best-fan" to DEFAULT_URL, "myiptv" to MYIPTV_URL)
-        val untouched = library.sources.size == stock.size && stock.all(predicate = { (id, url) -> library.sources.any(predicate = { source -> source.id == id && source.url == url }) })
-        if (!untouched) {
-            return library
-        }
-        return library.copy(sources = library.sources + PlaylistSource("iptv-org", "全球频道", IPTV_ORG_URL))
     }
 
     fun normalizeAddress(address: String): String {

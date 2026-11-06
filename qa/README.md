@@ -6,7 +6,7 @@
 
 运行前必须停止应用并备份 files、databases、no_backup，备份路径为 `%TEMP%/iptv-qa-original-data.tar`。测试会新增/删除测试源、清理模拟器内调试应用数据、切换模拟器网络和显示尺寸。结束时执行 restore_emulator.py 恢复原数据和设置。
 
-依次执行 android_tv_suite.py 的 real、forms、playback、volume、library_cases、source_edges、cache_cases、offline_cases、resolution_cases、worker_cases 阶段。每项会保存未经修改的 PNG、结果断言、测试数据和时间到 `app/build/outputs/qa`。首轮发现的问题保留修复前/后证据。
+依次执行 android_tv_suite.py 的 real、forms、playback、volume、library_cases、source_edges、cache_cases、offline_cases、resolution_cases 阶段。每项会保存未经修改的 PNG、结果断言、测试数据和时间到 `app/build/outputs/qa`。首轮发现的问题保留修复前/后证据。
 
 ```powershell
 python qa/fixture_server.py --media <本机生成的测试信号.mp4> --port 18764
@@ -18,9 +18,9 @@ python qa/build_gallery.py
 
 完成后打开 `app/build/outputs/qa/index.html`。可按场景分组、搜索、点击放大、方向键翻页；`iptv-scenario-screenshots.zip` 包含图册和全部原始截图。scenarios.json 保存逐项数据，summary.json 汇总结果，restoration.json 记录恢复结果。
 
-不能把模拟器验证等同于小米实体电视测试；强制执行日更任务不代表已经等待真实 24 小时。图册会列明这些边界。
+不能把模拟器验证等同于小米实体电视测试。图册会列明这些边界。
 
-1.2.0 首页收藏、代理、源管理、播放按钮改为图标，无障碍说明保留在 content-desc。旧测试脚本中依赖这些按钮 text 的步骤需要改为 content-desc；worker_cases 仅适用历史版本，当前不再创建周期任务。U01–U03 为新版实际截图。代理 JVM 测试覆盖地址校验、HTTP 407 认证及关闭直连，模拟器完整代理播放和 HTTPS CONNECT 尚未完成实测。
+1.2.0 首页收藏、代理、源管理、播放按钮改为图标，无障碍说明保留在 content-desc。旧测试脚本中依赖这些按钮 text 的步骤需要改为 content-desc。U01–U03 为新版实际截图。代理 JVM 测试覆盖地址校验、HTTP 407 认证及关闭直连，模拟器完整代理播放和 HTTPS CONNECT 尚未完成实测。
 
 交互回归（当前图标界面）：
 

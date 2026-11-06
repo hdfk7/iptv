@@ -17,7 +17,6 @@
     <string name="playing">正在直播</string>
     <string name="paused">已暂停</string>
     <string name="stream_error">线路不可用</string>
-    <string name="retry">重试频道</string>
     <string name="library_title">源管理</string>
     <string name="source_current">正在使用</string>
     <string name="source_use">启用</string>
@@ -38,11 +37,9 @@
     <string name="cancel">取消</string>
     <string name="close">关闭</string>
     <string name="favorites">收藏</string>
-    <string name="favorites_count">收藏 · %1$d</string>
     <string name="favorites_empty">暂无收藏</string>
     <string name="favorite_add">收藏节目</string>
     <string name="favorite_remove">取消收藏</string>
-    <string name="line_detail">线路 %1$d / %2$d</string>
     <string name="source_aggregate">自动汇总各源收藏</string>
     <string name="channel_number">%1$03d</string>
     <string name="fullscreen">全屏</string>
@@ -66,6 +63,8 @@
     <string name="app_update_failed">检查更新失败，请检查网络后重试。</string>
     <string name="app_update_confirm_download">确认下载</string>
     <string name="app_update_downloading">正在下载更新…</string>
+    <string name="app_update_progress">已下载 %1$s / %2$s（%3$d%%）</string>
+    <string name="app_update_progress_size">已下载 %1$s</string>
     <string name="app_update_download_failed">下载失败或安装包与版本信息不匹配，可重试。</string>
     <string name="app_update_install">安装更新</string>
     <string name="app_update_install_ready">更新已下载，请在系统安装界面确认。</string>

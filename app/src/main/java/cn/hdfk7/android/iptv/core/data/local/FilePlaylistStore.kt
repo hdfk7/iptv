@@ -8,7 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-class FilePlaylistStore(directory: File, name: String = "playlist.json") : PlaylistStore {
+class FilePlaylistStore(directory: File, name: String) : PlaylistStore {
     private val file = AtomicFile(File(directory, name))
 
     override fun read(): PlaylistSnapshot? {

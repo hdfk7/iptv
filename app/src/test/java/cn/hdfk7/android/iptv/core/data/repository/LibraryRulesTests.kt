@@ -6,16 +6,6 @@ import org.junit.jupiter.api.Test
 
 class LibraryRulesTests {
     @Test
-    fun shortensOnlyUnmodifiedDefaultSourceNames() {
-        val defaults = LibraryRules.defaults()
-        assertEquals(listOf("国内精选", "综合频道", "全球频道"), defaults.sources.map(transform = { source -> source.name }))
-        val legacy = defaults.copy(sources = listOf(defaults.sources[0].copy(name = "best-fan · 每日精选"), defaults.sources[1].copy(name = "myIPTV · IPv4"), defaults.sources[2]))
-        assertEquals(defaults, LibraryRules.shortenDefaultNames(legacy))
-        val custom = legacy.copy(sources = legacy.sources.map(transform = { source -> source.copy(name = "自定义") }))
-        assertEquals(custom, LibraryRules.shortenDefaultNames(custom))
-    }
-
-    @Test
     fun restoreDefaultsBringsBackStockSourcesAndKeepsFavorites() {
         val favorite = Channel("CCTV1", "TV", listOf("https://example.org/live"), "best-fan", "精选")
         val emptied = LibraryRules.defaults().let { library ->
@@ -26,19 +16,6 @@ class LibraryRulesTests {
         assertEquals("best-fan", restored.activeSourceId)
         assertEquals(listOf(favorite), restored.favorites)
     }
-
-    @Test
-    fun addsNewStockSourceOnlyToUntouchedLibrary() {
-        val stock = LibraryRules.defaults()
-        val legacy = stock.copy(sources = stock.sources.take(2))
-        val migrated = LibraryRules.appendNewDefaults(legacy)
-        assertEquals(listOf("国内精选", "综合频道", "全球频道"), migrated.sources.map(transform = { source -> source.name }))
-        assertEquals(stock, LibraryRules.appendNewDefaults(stock))
-        val custom = stock.copy(sources = libraryOf("custom"))
-        assertEquals(custom, LibraryRules.appendNewDefaults(custom))
-    }
-
-    private fun libraryOf(name: String) = listOf(PlaylistSource("custom-id", name, "https://example.org/x.m3u"))
 
     @Test
     fun knownRepositoriesAndGithubFileLinksResolveToRawPlaylists() {

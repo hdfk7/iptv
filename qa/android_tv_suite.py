@@ -673,45 +673,9 @@ class TvSuite:
             self.run("shell", "wm", "density", "reset")
             self.launch()
 
-    def worker_cases(self):
-        import sqlite3
-
-        self.activate("QA Cache", 5)
-        local = Path(os.environ["TEMP"]) / "iptv-qa-workdb"
-        local.mkdir(exist_ok=True)
-        for suffix in ["", "-wal", "-shm"]:
-            try:
-                data = self.run("exec-out", "run-as", PACKAGE, "cat", "no_backup/androidx.work.workdb" + suffix)
-                (local / ("workdb" + suffix)).write_bytes(data)
-            except RuntimeError:
-                pass
-        with sqlite3.connect(local / "workdb") as connection:
-            rows = connection.execute("SELECT id,state,interval_duration FROM workspec WHERE worker_class_name LIKE '%PlaylistRefreshWorker'").fetchall()
-        assert len(rows) == 1 and rows[0][2] == 86400000
-        schedule = self.run("shell", "dumpsys", "jobscheduler").decode("utf-8", errors="replace")
-        matches = re.findall(r"^\s*JOB\s+(?:([\w.]+):)?#?u\d+a\d+/(\d+):[^\n]*" + re.escape(PACKAGE) + r"/androidx\.work\.impl\.background\.systemjob\.SystemJobService", schedule, re.MULTILINE)
-        assert matches, "WorkManager job not found"
-        before = len([event for event in self.events() if event["path"].startswith("/mutable.m3u")])
-        namespace, job_id = matches[0]
-        command = ["shell", "cmd", "jobscheduler", "run", "-f"]
-        if namespace:
-            command.extend(["--namespace", namespace])
-        command.extend([PACKAGE, job_id])
-        result = self.run(*command).decode("utf-8", errors="replace")
-        deadline = time.monotonic() + 25
-        while time.monotonic() < deadline:
-            after = len([event for event in self.events() if event["path"].startswith("/mutable.m3u")])
-            if after > before:
-                break
-            time.sleep(0.5)
-        else:
-            raise AssertionError("Forced worker did not download active playlist")
-        self.record("J01", "每日任务配置与强制执行", "后台任务", "数据库中只有一个日更任务，间隔 24 小时；强制执行后确实请求了当前源。未等待真实 24 小时。", {"periodicRows": len(rows), "intervalMs": rows[0][2], "namespace": namespace, "jobId": job_id, "requestDelta": after - before, "scheduler": result.strip(), "elapsed24Hours": False})
-
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("phase", choices=["real", "forms", "playback", "volume", "library_cases", "source_edges", "cache_cases", "offline_cases", "resolution_cases", "worker_cases"])
+    parser.add_argument("phase", choices=["real", "forms", "playback", "volume", "library_cases", "source_edges", "cache_cases", "offline_cases", "resolution_cases"])
     parser.add_argument("--serial", default="emulator-5580")
     parser.add_argument("--output", type=Path, default=Path("app/build/outputs/qa"))
     arguments = parser.parse_args()
