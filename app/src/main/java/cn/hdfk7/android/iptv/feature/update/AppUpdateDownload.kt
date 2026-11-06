@@ -15,7 +15,7 @@ import okhttp3.Request
 import okhttp3.Response
 
 private val progressInterval = TimeUnit.MILLISECONDS.toNanos(120)
-private val updateClient = OkHttpClient.Builder().followSslRedirects(false).build()
+private val updateClient = OkHttpClient.Builder().followSslRedirects(false).readTimeout(3, TimeUnit.MINUTES).build()
 
 internal data class AppDownloadProgress(val downloaded: Long, val total: Long) {
     val fraction: Float?
