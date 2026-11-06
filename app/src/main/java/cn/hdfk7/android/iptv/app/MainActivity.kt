@@ -110,20 +110,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showBackToast() {
-        val text = android.widget.TextView(this)
-        text.text = getString(R.string.press_back_again)
-        text.setTextColor(android.graphics.Color.WHITE)
-        text.textSize = 15f
-        val padding = (16 * resources.displayMetrics.density).toInt()
-        text.setPadding(padding, padding / 2, padding, padding / 2)
-        text.background = android.graphics.drawable.GradientDrawable().apply {
-            setColor(0xE6202630.toInt())
-            cornerRadius = 12f * resources.displayMetrics.density
-        }
-        val toast = Toast(this)
-        toast.duration = Toast.LENGTH_SHORT
-        toast.view = text
-        toast.show()
+        Toast.makeText(this, R.string.press_back_again, Toast.LENGTH_SHORT).show()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
