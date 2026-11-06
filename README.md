@@ -131,7 +131,7 @@ Kotlin 使用显式参数和命名回调，无尾随 Lambda；界面单一根组
 手机和电视都可从首页的设置图标进入“检查应用更新”，刷新图标仍用于更新节目列表。更新检查只请求一个 HTTPS 接口，该接口返回以下格式的 JSON。
 
 ```json
-{"versionCode": 12, "versionName": "1.2.8", "apkUrl": "IPTV-release-v1.2.8-20261106150000.apk"}
+{"versionCode": 13, "versionName": "1.2.9", "apkUrl": "IPTV-release-v1.2.9-20261106150000.apk"}
 ```
 
 运行 `./gradlew :app:assembleRelease` 会自动从打包结果生成 `app/build/outputs/update/release/latest.json`。先上传同次构建的 Release APK，再上传 JSON 到同一个 HTTPS 目录。生成的 `apkUrl` 是实际 APK 文件名，应用以接口地址为基准解析，也接受完整 HTTPS 下载地址。Debug 构建有独立的 `outputs/update/debug/latest.json`。
