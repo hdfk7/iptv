@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -38,6 +39,7 @@ import cn.hdfk7.android.iptv.core.model.SourceLibrary
 import cn.hdfk7.android.iptv.core.ui.components.LocalTvActionFocused
 import cn.hdfk7.android.iptv.core.ui.components.TvAction
 import cn.hdfk7.android.iptv.core.ui.components.TvIconButton
+import cn.hdfk7.android.iptv.core.ui.components.tvDirections
 import cn.hdfk7.android.iptv.core.ui.theme.*
 import cn.hdfk7.android.iptv.feature.phone.PhonePlayerScreen
 import cn.hdfk7.android.iptv.feature.tv.TvPlayerScreen
@@ -172,25 +174,47 @@ private enum class SettingsPage { Menu, Proxy, Update }
 
 @Composable
 private fun HomeSettingsDialog(onClose: () -> Unit, onProxy: () -> Unit, onUpdate: () -> Unit, television: Boolean) {
+    val closeFocus = remember(calculation = { FocusRequester() })
     val proxyFocus = remember(calculation = { FocusRequester() })
+    val updateFocus = remember(calculation = { FocusRequester() })
     Dialog(onDismissRequest = onClose, content = {
         val inputMode = LocalInputModeManager.current
+        val windowFocused = LocalWindowInfo.current.isWindowFocused
+        LaunchedEffect(key1 = television, key2 = windowFocused, block = {
+            if (television && windowFocused) {
+                inputMode.requestInputMode(InputMode.Keyboard)
+                withFrameNanos(onFrame = { })
+                proxyFocus.requestFocus()
+            }
+        })
+        val closeNavigation = if (television) {
+            Modifier.focusRequester(closeFocus).tvDirections(down = { proxyFocus.requestFocus() })
+        } else {
+            Modifier
+        }
+        val proxyNavigation = if (television) {
+            Modifier.focusRequester(proxyFocus).tvDirections(
+                up = { closeFocus.requestFocus() },
+                down = { updateFocus.requestFocus() }
+            )
+        } else {
+            Modifier
+        }
+        val updateNavigation = if (television) {
+            Modifier.focusRequester(updateFocus).tvDirections(up = { proxyFocus.requestFocus() })
+        } else {
+            Modifier
+        }
         Column(
             modifier = Modifier.fillMaxWidth().background(DialogSurface, RoundedCornerShape(22.dp)).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             content = {
                 Row(verticalAlignment = Alignment.CenterVertically, content = {
                     Text(text = stringResource(R.string.settings_title), color = Color.White, fontSize = 22.sp, modifier = Modifier.weight(1f))
-                    TvIconButton(icon = R.drawable.ic_close, description = stringResource(R.string.settings_close), onClick = onClose)
+                    TvIconButton(icon = R.drawable.ic_close, description = stringResource(R.string.settings_close), onClick = onClose, modifier = closeNavigation)
                 })
-                SettingsEntry(icon = R.drawable.ic_settings, title = stringResource(R.string.proxy_title), onClick = onProxy, modifier = Modifier.focusRequester(proxyFocus))
-                SettingsEntry(icon = R.drawable.ic_update, title = stringResource(R.string.app_update_title), onClick = onUpdate)
-                LaunchedEffect(key1 = television, block = {
-                    if (television) {
-                        inputMode.requestInputMode(InputMode.Keyboard)
-                        proxyFocus.requestFocus()
-                    }
-                })
+                SettingsEntry(icon = R.drawable.ic_settings, title = stringResource(R.string.proxy_title), onClick = onProxy, modifier = proxyNavigation)
+                SettingsEntry(icon = R.drawable.ic_update, title = stringResource(R.string.app_update_title), onClick = onUpdate, modifier = updateNavigation)
             }
         )
     })
